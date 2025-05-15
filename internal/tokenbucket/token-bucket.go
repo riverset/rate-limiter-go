@@ -24,7 +24,6 @@ func New(rate, capacity int) *limiter {
 		buckets:  make(map[string]*tokenBucket),
 		rate:     rate,
 		capacity: capacity,
-		
 	}
 }
 
