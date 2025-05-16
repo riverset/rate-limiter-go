@@ -13,7 +13,8 @@ import (
 func main() {
 	// rateLimiter := api.NewTokenBucketLimiter(1, 10)
 	// rateLimiter := api.NewFixedCounterLimiter(20, 20)
-	rateLimiter := api.NewSlidingWindowLogLimiter(20, 20)
+	// rateLimiter := api.NewSlidingWindowLogLimiter(20, 20)
+	rateLimiter := api.NewSlidingWindowCounter(20, 20)
 	http.HandleFunc("/unlimited", func(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusOK) // This sets 200 status code
