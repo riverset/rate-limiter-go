@@ -1,4 +1,4 @@
-package api
+package ratelimiter
 
 import (
 	"learn.ratelimiter/internal/fixedcounter"
