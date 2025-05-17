@@ -41,18 +41,14 @@ func (l *limiter) Allow(identifier string) bool {
 	timeSinceWindowStart := time.Since(currentCounter.currentWindowStart).Seconds()
 
 	if timeSinceWindowStart >= float64(l.windowSizeSeconds) {
-		var newCounter *slidingWindowCounter
 		if timeSinceWindowStart < 2*float64(l.windowSizeSeconds) {
-			newCounter = l.initializeWindowCounter(currentCounter.currentWindowCount)
+			currentCounter.previousWindowCount = currentCounter.currentWindowCount
+			currentCounter.currentWindowCount = 0
 		} else {
-			newCounter = l.initializeWindowCounter(0)
+			currentCounter.currentWindowCount = 0
+			currentCounter.previousWindowCount = 0
 		}
-		currentCounter.mu.Unlock()
-		currentCounter = newCounter
-		currentCounter.mu.Lock()
-		defer currentCounter.mu.Unlock()
-
-		l.counter.Store(identifier, newCounter)
+		currentCounter.currentWindowStart = time.Now().Truncate(time.Duration(l.windowSizeSeconds) * time.Second)
 		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart).Seconds()
 	}
 
