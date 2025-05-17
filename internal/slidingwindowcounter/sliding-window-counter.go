@@ -1,50 +1,58 @@
 package slidingwindowcounter
 
 import (
+	"log"
 	"sync"
 	"time"
 )
 
 type limiter struct {
-	counter           map[string]*slidingWindowCounter
+	counter           sync.Map
 	windowSizeSeconds int
 	limit             int
-	mu                sync.Mutex
 }
 
 type slidingWindowCounter struct {
 	previousWindowCount int
 	currentWindowCount  int
 	currentWindowStart  time.Time
+	mu                  sync.Mutex
 }
 
 func New(windowSizeSeconds, limit int) *limiter {
 	return &limiter{
-		counter:           make(map[string]*slidingWindowCounter),
+		counter:           sync.Map{},
 		windowSizeSeconds: windowSizeSeconds,
 		limit:             limit,
 	}
 }
 
 func (l *limiter) Allow(identifier string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
-	currentCounter, exists := l.counter[identifier]
-	if !exists {
-		l.counter[identifier] = l.initializeWindowCounter(0)
-		return true
+	tempCounter, _ := l.counter.LoadOrStore(identifier, l.initializeWindowCounter(0))
+	currentCounter, ok := tempCounter.(*slidingWindowCounter)
+	if !ok {
+		log.Printf("Could not convert loaded counter to sliding window counter")
+		return false
 	}
+	currentCounter.mu.Lock()
+	defer currentCounter.mu.Unlock()
 
 	timeSinceWindowStart := time.Since(currentCounter.currentWindowStart).Seconds()
 
 	if timeSinceWindowStart >= float64(l.windowSizeSeconds) {
+		var newCounter *slidingWindowCounter
 		if timeSinceWindowStart < 2*float64(l.windowSizeSeconds) {
-			currentCounter = l.initializeWindowCounter(currentCounter.currentWindowCount)
+			newCounter = l.initializeWindowCounter(currentCounter.currentWindowCount)
 		} else {
-			currentCounter = l.initializeWindowCounter(0)
+			newCounter = l.initializeWindowCounter(0)
 		}
-		l.counter[identifier] = currentCounter
+		currentCounter.mu.Unlock()
+		currentCounter = newCounter
+		currentCounter.mu.Lock()
+		defer currentCounter.mu.Unlock()
+
+		l.counter.Store(identifier, newCounter)
 		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart).Seconds()
 	}
 
