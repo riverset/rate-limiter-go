@@ -18,6 +18,7 @@ func NewFixedWindowFactory() *FixedWindowFactory {
 }
 
 // CreateLimiter creates a Fixed Window Counter limiter based on the configuration and clients.
+// It now returns core.Limiter to match the LimiterFactory interface.
 func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients core.BackendClients) (core.Limiter, error) {
 	if cfg.FixedWindowCounterParams == nil {
 		return nil, fmt.Errorf("fixed window counter parameters are missing in config for key '%s'", cfg.Key)

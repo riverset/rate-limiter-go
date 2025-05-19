@@ -29,9 +29,8 @@ func NewLimiter(client *redis.Client, key string, window time.Duration, limit in
 }
 
 // Allow checks if a request for the given identifier is allowed using a Redis Lua script.
-func (l *Limiter) Allow(identifier string) (bool, error) {
-	ctx := context.Background()
-
+// It now accepts a context.Context parameter and passes it to the Redis client.
+func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	redisKey := l.key + ":" + identifier
 
 	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)

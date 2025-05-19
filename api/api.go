@@ -12,7 +12,7 @@ import (
 
 // NewLimitersFromConfigPath loads config, initializes any needed backend clients,
 // and returns a map of rate limiters keyed by their configuration key.
-func NewLimitersFromConfigPath(configPath string) (map[string]Limiter, error) {
+func NewLimitersFromConfigPath(configPath string) (map[string]core.Limiter, error) {
 	// Use the helper from the internal package to load all configs
 	cfgFile, err := apiinternal.LoadConfig(configPath)
 	if err != nil {
@@ -63,7 +63,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]Limiter, error) {
 	// if anyCfg.Backend == config.Memcache { ... }
 
 	// Create a map to hold the initialized limiters
-	limiters := make(map[string]Limiter)
+	limiters := make(map[string]core.Limiter)
 
 	// Iterate through each limiter configuration and create the limiter instance
 	for _, cfg := range cfgFile.Limiters {

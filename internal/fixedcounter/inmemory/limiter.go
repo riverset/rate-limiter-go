@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -33,7 +34,8 @@ func NewLimiter(key string, window time.Duration, limit int64) *Limiter {
 }
 
 // Allow checks if a request for the given identifier is allowed.
-func (l *Limiter) Allow(identifier string) (bool, error) {
+// It now accepts a context.Context parameter.
+func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	stateIface, _ := l.counters.LoadOrStore(identifier, &CounterState{})
 
 	state, ok := stateIface.(*CounterState)

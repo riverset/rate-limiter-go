@@ -1,10 +1,14 @@
 package core
 
-import "github.com/go-redis/redis/v8"
+import (
+	"context" // Import context
+
+	"github.com/go-redis/redis/v8"
+)
 
 // Limiter is the interface that all rate limiting algorithms must implement.
 type Limiter interface {
-	Allow(key string) (bool, error)
+	Allow(ctx context.Context, key string) (bool, error) // Added context parameter
 }
 
 // BackendClients holds initialized backend client instances.

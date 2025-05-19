@@ -4,18 +4,18 @@ import (
 	"log"
 	"net/http"
 
-	ratelimiter "learn.ratelimiter/api"
+	"learn.ratelimiter/core"
 	"learn.ratelimiter/metrics"
 )
 
 // RateLimitMiddleware provides rate limiting functionality.
 type RateLimitMiddleware struct {
-	limiter ratelimiter.Limiter
+	limiter core.Limiter
 	metrics *metrics.RateLimitMetrics
 }
 
 // NewRateLimitMiddleware creates a new RateLimitMiddleware.
-func NewRateLimitMiddleware(limiter ratelimiter.Limiter, metrics *metrics.RateLimitMetrics) *RateLimitMiddleware {
+func NewRateLimitMiddleware(limiter core.Limiter, metrics *metrics.RateLimitMetrics) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
 		limiter: limiter,
 		metrics: metrics,
@@ -35,7 +35,8 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 			return
 		}
 
-		allowed, err := m.limiter.Allow(identifier)
+		// Pass the request's context to the Allow method
+		allowed, err := m.limiter.Allow(r.Context(), identifier)
 		if err != nil {
 			log.Printf("Error checking rate limit for %s: %v", identifier, err)
 			w.WriteHeader(http.StatusInternalServerError)

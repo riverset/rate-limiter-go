@@ -20,5 +20,5 @@ func NewFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
 
 // LimiterFactory is an interface for creating a Limiter.
 type LimiterFactory interface {
-	CreateLimiter(cfg config.LimiterConfig, clients core.BackendClients) (Limiter, error)
+	CreateLimiter(cfg config.LimiterConfig, clients core.BackendClients) (core.Limiter, error)
 }
