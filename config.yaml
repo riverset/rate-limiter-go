@@ -1,0 +1,18 @@
+# Configuration for the rate limiter
+
+# Define a specific limiter instance
+limiter:
+  key: "api_rate_limit" # A unique identifier for this limiter configuration
+  algorithm: "fixed_window_counter" # Choose algorithm: fixed_window_counter, token_bucket, etc.
+  backend: "in_memory" # Choose backend: in_memory, redis, etc.
+
+  # Algorithm-specific parameters
+  fixed_window_counter_params:
+    window: 1m # e.g., 1m, 30s, 5m
+    limit: 10 # Max requests per window
+
+  # Backend-specific parameters (uncomment and configure if using Redis)
+  # redis_params:
+  #   address: "localhost:6379"
+  #   password: "" # No password
+  #   db: 0 # Default DB
