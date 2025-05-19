@@ -32,7 +32,6 @@ func (l *limiter) Allow(identifier string) bool {
 	defer l.mu.Unlock()
 	bucket, exists := l.buckets[identifier]
 	if !exists {
-		// Bucket doesn't exist yet
 		l.buckets[identifier] = &tokenBucket{
 			tokens:     l.capacity,
 			capacity:   l.capacity,

@@ -1,24 +1,24 @@
-package ratelimiter
+package api
 
 import (
-	"learn.ratelimiter/internal/fixedcounter"
-	"learn.ratelimiter/internal/slidingwindowcounter"
-	"learn.ratelimiter/internal/slidingwindowlog"
-	"learn.ratelimiter/internal/tokenbucket"
+	"fmt"
+
+	"learn.ratelimiter/config"
+	"learn.ratelimiter/core"
+	"learn.ratelimiter/internal/factory"
 )
 
-func NewTokenBucketLimiter(rate, capacity int) Limiter {
-	return tokenbucket.New(rate, capacity)
+// NewFactory returns a concrete LimiterFactory based on the algorithm.
+func NewFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
+	switch cfg.Algorithm {
+	case config.FixedWindowCounter:
+		return factory.NewFixedWindowFactory(), nil
+	default:
+		return nil, fmt.Errorf("unsupported algorithm type '%s' for key '%s'", cfg.Algorithm, cfg.Key)
+	}
 }
 
-func NewFixedCounterLimiter(windowSize, limit int) Limiter {
-	return fixedcounter.New(windowSize, limit)
-}
-
-func NewSlidingWindowLogLimiter(windowSize, limit int) Limiter {
-	return slidingwindowlog.New(windowSize, limit)
-}
-
-func NewSlidingWindowCounter(windowSize, limit int) Limiter {
-	return slidingwindowcounter.New(windowSize, limit)
+// LimiterFactory is an interface for creating a Limiter.
+type LimiterFactory interface {
+	CreateLimiter(cfg config.LimiterConfig, clients core.BackendClients) (Limiter, error)
 }

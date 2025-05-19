@@ -1,5 +1,6 @@
-package ratelimiter
+package api
 
-type Limiter interface {
-	Allow(identifier string) bool
-}
+import "learn.ratelimiter/core"
+
+// Limiter is the interface for rate limiters.
+type Limiter = core.Limiter

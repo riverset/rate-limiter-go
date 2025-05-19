@@ -1,0 +1,27 @@
+# Configuration for the rate limiter
+
+# Define a list of rate limiters
+limiters:
+  - key: "api_rate_limit"
+    algorithm: "fixed_window_counter"
+    backend: "in_memory"
+    fixed_window_counter_params:
+      window: 1m
+      limit: 10
+
+  - key: "user_login_rate_limit"
+    algorithm: "fixed_window_counter"
+    backend: "redis"
+    fixed_window_counter_params:
+      window: 5m
+      limit: 50
+    redis_params:
+      address: "localhost:6379"
+      password: ""
+      db: 0
+
+  # Add more limiter configurations here as needed
+  # - key: "another_limiter"
+  #   algorithm: "..."
+  #   backend: "..."
+  #   ...params...
