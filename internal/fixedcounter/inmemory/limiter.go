@@ -3,6 +3,7 @@ package inmemory
 import (
 	"context"
 	"fmt"
+	"log" // Added log import
 	"sync"
 	"time"
 )
@@ -25,6 +26,7 @@ type Limiter struct {
 
 // NewLimiter creates a new in-memory Fixed Window Counter limiter.
 func NewLimiter(key string, window time.Duration, limit int64) *Limiter {
+	log.Printf("Initialized in-memory Fixed Window Counter limiter for key '%s' with window %s and limit %d", key, window, limit)
 	return &Limiter{
 		key:      key,
 		window:   window,
@@ -40,7 +42,9 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 
 	state, ok := stateIface.(*CounterState)
 	if !ok {
-		return false, fmt.Errorf("unexpected state type for identifier %s", identifier)
+		err := fmt.Errorf("unexpected state type for identifier %s in in-memory limiter '%s'", identifier, l.key)
+		log.Printf("Error in Allow for key '%s', identifier '%s': %v", l.key, identifier, err)
+		return false, err
 	}
 
 	state.mu.Lock()

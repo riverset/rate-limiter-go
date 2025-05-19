@@ -1,6 +1,8 @@
 package tokenbucket
 
 import (
+	"context"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -20,6 +22,7 @@ type tokenBucket struct {
 }
 
 func New(rate, capacity int) *limiter {
+	log.Printf("Initialized in-memory Token Bucket limiter with rate %d and capacity %d", rate, capacity)
 	return &limiter{
 		buckets:  make(map[string]*tokenBucket),
 		rate:     rate,
@@ -27,11 +30,15 @@ func New(rate, capacity int) *limiter {
 	}
 }
 
-func (l *limiter) Allow(identifier string) bool {
+// Allow checks if a request for the given identifier is allowed.
+// Updated to match core.Limiter interface.
+func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	bucket, exists := l.buckets[identifier]
 	if !exists {
+		log.Printf("Creating new token bucket for identifier '%s'", identifier)
 		l.buckets[identifier] = &tokenBucket{
 			tokens:     l.capacity,
 			capacity:   l.capacity,
@@ -40,16 +47,35 @@ func (l *limiter) Allow(identifier string) bool {
 		bucket = l.buckets[identifier]
 	}
 
-	numTokensAdded := int(math.Floor(time.Since(bucket.lastRefill).Seconds() * float64(l.rate)))
+	// Refill tokens
+	now := time.Now()
+	numTokensAdded := int(math.Floor(now.Sub(bucket.lastRefill).Seconds() * float64(l.rate)))
 	if numTokensAdded > 0 {
-		bucket.tokens = min(bucket.capacity, bucket.tokens+int(numTokensAdded))
-		bucket.lastRefill = time.Now()
+		bucket.tokens = min(bucket.capacity, bucket.tokens+numTokensAdded)
+		bucket.lastRefill = now // Update last refill time
+	}
+
+	// Check if context is cancelled before proceeding
+	select {
+	case <-ctx.Done():
+		log.Printf("Context cancelled for identifier '%s' during token bucket check: %v", identifier, ctx.Err())
+		return false, ctx.Err()
+	default:
+		// Continue
 	}
 
 	if bucket.tokens > 0 {
 		bucket.tokens -= 1
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
+}
+
+// min is a helper function (Go 1.18+ has built-in min)
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

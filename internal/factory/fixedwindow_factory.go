@@ -2,6 +2,7 @@ package factory
 
 import (
 	"fmt"
+	"log" // Added log import
 
 	"learn.ratelimiter/config"
 	inmemoryfc "learn.ratelimiter/internal/fixedcounter/inmemory"
@@ -18,22 +19,33 @@ func NewFixedWindowFactory() *FixedWindowFactory {
 }
 
 // CreateLimiter creates a Fixed Window Counter limiter based on the configuration and clients.
-// It now returns core.Limiter to match the LimiterFactory interface.
+// It now returns types.Limiter and accepts types.BackendClients.
 func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
+	log.Printf("Creating Fixed Window Counter limiter for key '%s' with backend '%s'", cfg.Key, cfg.Backend)
 	if cfg.FixedWindowCounterParams == nil {
-		return nil, fmt.Errorf("fixed window counter parameters are missing in config for key '%s'", cfg.Key)
+		err := fmt.Errorf("fixed window counter parameters are missing in config for key '%s'", cfg.Key)
+		log.Printf("Creation failed: %v", err)
+		return nil, err
 	}
 	switch cfg.Backend {
 	case config.InMemory:
+		log.Printf("Creating in-memory Fixed Window Counter limiter for key '%s'", cfg.Key)
 		return inmemoryfc.NewLimiter(cfg.Key, cfg.FixedWindowCounterParams.Window, cfg.FixedWindowCounterParams.Limit), nil
 	case config.Redis:
+		log.Printf("Creating Redis Fixed Window Counter limiter for key '%s'", cfg.Key)
 		if clients.RedisClient == nil {
-			return nil, fmt.Errorf("redis client is required but not provided for redis backend for key '%s'", cfg.Key)
+			err := fmt.Errorf("redis client is required but not provided for redis backend for key '%s'", cfg.Key)
+			log.Printf("Creation failed: %v", err)
+			return nil, err
 		}
 		return redisfc.NewLimiter(clients.RedisClient, cfg.Key, cfg.FixedWindowCounterParams.Window, cfg.FixedWindowCounterParams.Limit), nil
 	case config.Memcache:
-		return nil, fmt.Errorf("memcache backend not yet implemented for fixed window counter for key '%s'", cfg.Key)
+		err := fmt.Errorf("memcache backend not yet implemented for fixed window counter for key '%s'", cfg.Key)
+		log.Printf("Creation failed: %v", err)
+		return nil, err
 	default:
-		return nil, fmt.Errorf("unsupported backend type '%s' for fixed window counter for key '%s'", cfg.Backend, cfg.Key)
+		err := fmt.Errorf("unsupported backend type '%s' for fixed window counter for key '%s'", cfg.Backend, cfg.Key)
+		log.Printf("Creation failed: %v", err)
+		return nil, err
 	}
 }
