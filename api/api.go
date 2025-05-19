@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"learn.ratelimiter/config"
+	"learn.ratelimiter/core" // added to reference shared types
 )
 
 // loadConfig reads the configuration from a YAML file.
@@ -42,9 +43,8 @@ func NewLimiterFromConfigPath(configPath string) (Limiter, error) {
 		return nil, fmt.Errorf("error loading configuration: %w", err)
 	}
 
-	// Initialize backend clients based on config
-	// Only initialize the client(s) required by the configured limiter(s)
-	backendClients := BackendClients{} // BackendClients struct is defined in api/factory.go
+	// Initialize backend clients based on config using core.BackendClients
+	backendClients := core.BackendClients{} // updated here
 
 	if cfg.Backend == config.Redis {
 		if cfg.RedisParams == nil {
@@ -70,11 +70,11 @@ func NewLimiterFromConfigPath(configPath string) (Limiter, error) {
 		backendClients.RedisClient = redisClient // Add the initialized client to the struct
 	}
 
-	// Add initialization for other backends here if needed by the config
-	// if cfg.Backend == config.Memcache { ... }
-
-	// Initialize factory (no dependencies needed here anymore)
-	factory := NewFactory() // NewFactory is defined in api/factory.go
+	// Use the new factory that returns a strategy for the algorithm.
+	factory, err := NewFactory(*cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create limiter instance using the factory, config, and initialized clients
 	rateLimiter, err := factory.CreateLimiter(*cfg, backendClients) // Pass the clients struct

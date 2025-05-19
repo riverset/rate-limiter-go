@@ -1,6 +1,6 @@
 package api
 
-// Limiter is the interface that all rate limiting algorithms must implement.
-type Limiter interface {
-	Allow(key string) (bool, error)
-}
+import "learn.ratelimiter/core"
+
+// Limiter is the interface for rate limiters.
+type Limiter = core.Limiter
