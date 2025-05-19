@@ -11,7 +11,7 @@ import (
 // Limiter implements the Fixed Window Counter algorithm using Redis.
 type Limiter struct {
 	client *redis.Client
-	key    string // Base key for this limiter instance
+	key    string
 	window time.Duration
 	limit  int64
 	script *redis.Script
@@ -24,36 +24,25 @@ func NewLimiter(client *redis.Client, key string, window time.Duration, limit in
 		key:    key,
 		window: window,
 		limit:  limit,
-		script: redisAllowScript, // Use the preloaded script
+		script: redisAllowScript,
 	}
 }
 
 // Allow checks if a request for the given identifier is allowed using a Redis Lua script.
 func (l *Limiter) Allow(identifier string) (bool, error) {
-	ctx := context.Background() // Use a proper context in a real application
+	ctx := context.Background()
 
-	// The Redis key for this specific counter instance + identifier
 	redisKey := l.key + ":" + identifier
 
-	// Arguments for the Lua script:
-	// ARGV[1]: current timestamp in milliseconds
-	// ARGV[2]: window duration in milliseconds
-	// ARGV[3]: limit
-	// ARGV[4]: expiry time for the key (window duration in seconds)
 	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
 	windowMillis := l.window.Milliseconds()
-	expirySeconds := int64(l.window.Seconds()) // Use seconds for Redis TTL
+	expirySeconds := int64(l.window.Seconds())
 
-	// Execute the Lua script
-	// KEYS: {redisKey}
-	// ARGV: {nowMillis, windowMillis, l.limit, expirySeconds}
 	result, err := l.script.Run(ctx, l.client, []string{redisKey}, nowMillis, windowMillis, l.limit, expirySeconds).Result()
 	if err != nil {
-		// Handle specific Redis errors if necessary
 		return false, fmt.Errorf("redis script execution failed: %w", err)
 	}
 
-	// The script returns 1 if allowed, 0 if denied.
 	allowed, ok := result.(int64)
 	if !ok {
 		return false, fmt.Errorf("unexpected script result type: %T", result)
