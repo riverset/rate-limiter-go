@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"learn.ratelimiter/config"
-	"learn.ratelimiter/core"
 	"learn.ratelimiter/internal/factory"
+	"learn.ratelimiter/types"
 )
 
 // NewFactory returns a concrete LimiterFactory based on the algorithm.
@@ -20,5 +20,5 @@ func NewFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
 
 // LimiterFactory is an interface for creating a Limiter.
 type LimiterFactory interface {
-	CreateLimiter(cfg config.LimiterConfig, clients core.BackendClients) (core.Limiter, error)
+	CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error)
 }

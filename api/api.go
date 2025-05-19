@@ -7,12 +7,12 @@ import (
 	"github.com/go-redis/redis/v8" // Import redis for client type
 	apiinternal "learn.ratelimiter/api/internal"
 	"learn.ratelimiter/config"
-	"learn.ratelimiter/core"
+	"learn.ratelimiter/types"
 )
 
 // NewLimitersFromConfigPath loads config, initializes any needed backend clients,
 // and returns a map of rate limiters keyed by their configuration key.
-func NewLimitersFromConfigPath(configPath string) (map[string]core.Limiter, error) {
+func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, error) {
 	// Use the helper from the internal package to load all configs
 	cfgFile, err := apiinternal.LoadConfig(configPath)
 	if err != nil {
@@ -25,7 +25,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]core.Limiter, erro
 
 	// Initialize backend clients needed by *any* limiter
 	// This avoids initializing clients multiple times if multiple limiters use the same backend.
-	backendClients := core.BackendClients{}
+	backendClients := types.BackendClients{}
 	var redisClient *redis.Client // Use the concrete type here
 
 	// Check if Redis is needed by any limiter
@@ -63,7 +63,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]core.Limiter, erro
 	// if anyCfg.Backend == config.Memcache { ... }
 
 	// Create a map to hold the initialized limiters
-	limiters := make(map[string]core.Limiter)
+	limiters := make(map[string]types.Limiter)
 
 	// Iterate through each limiter configuration and create the limiter instance
 	for _, cfg := range cfgFile.Limiters {

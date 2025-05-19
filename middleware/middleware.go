@@ -4,18 +4,18 @@ import (
 	"log"
 	"net/http"
 
-	"learn.ratelimiter/core"
 	"learn.ratelimiter/metrics"
+	"learn.ratelimiter/types"
 )
 
 // RateLimitMiddleware provides rate limiting functionality.
 type RateLimitMiddleware struct {
-	limiter core.Limiter
+	limiter types.Limiter
 	metrics *metrics.RateLimitMetrics
 }
 
 // NewRateLimitMiddleware creates a new RateLimitMiddleware.
-func NewRateLimitMiddleware(limiter core.Limiter, metrics *metrics.RateLimitMetrics) *RateLimitMiddleware {
+func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
 		limiter: limiter,
 		metrics: metrics,
