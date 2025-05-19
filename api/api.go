@@ -2,33 +2,66 @@ package api
 
 import (
 	"fmt"
+	"io" // Import io for the Closer interface
 	"log"
 
-	"github.com/go-redis/redis/v8" // Import redis for client type
+	"github.com/go-redis/redis/v8"
 	apiinternal "learn.ratelimiter/api/internal"
 	"learn.ratelimiter/config"
 	"learn.ratelimiter/types"
 )
 
+// clientCloser is an internal type that holds backend clients and implements io.Closer.
+type clientCloser struct {
+	clients types.BackendClients
+}
+
+// Close gracefully shuts down all initialized backend clients held by the clientCloser.
+func (c *clientCloser) Close() error {
+	var errs []error
+
+	if c.clients.RedisClient != nil {
+		log.Println("Closing Redis client...")
+		if err := c.clients.RedisClient.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close Redis client: %w", err))
+		} else {
+			log.Println("Redis client closed.")
+		}
+	}
+
+	// Add closing logic for other clients (e.g., Memcache) here
+	// if c.clients.MemcacheClient != nil {
+	// 	log.Println("Closing Memcache client...")
+	// 	if err := c.clients.MemcacheClient.Close(); err != nil {
+	// 		errs = append(errs, fmt.Errorf("failed to close Memcache client: %w", err))
+	// 	} else {
+	// 		log.Println("Memcache client closed.")
+	// 	}
+	// }
+
+	if len(errs) > 0 {
+		// You might want to return a multi-error type here in a real library
+		return fmt.Errorf("errors during client shutdown: %v", errs)
+	}
+
+	return nil
+}
+
 // NewLimitersFromConfigPath loads config, initializes any needed backend clients,
-// and returns a map of rate limiters keyed by their configuration key.
-func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, error) {
-	// Use the helper from the internal package to load all configs
+// and returns a map of rate limiters and an io.Closer for backend clients.
+func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.Closer, error) { // Updated return type
 	cfgFile, err := apiinternal.LoadConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("error loading configuration: %w", err)
+		return nil, nil, fmt.Errorf("error loading configuration: %w", err) // Updated return
 	}
 
 	if len(cfgFile.Limiters) == 0 {
-		return nil, fmt.Errorf("no limiter configurations found in %s", configPath)
+		return nil, nil, fmt.Errorf("no limiter configurations found in %s", configPath) // Updated return
 	}
 
-	// Initialize backend clients needed by *any* limiter
-	// This avoids initializing clients multiple times if multiple limiters use the same backend.
 	backendClients := types.BackendClients{}
-	var redisClient *redis.Client // Use the concrete type here
+	var redisClient *redis.Client
 
-	// Check if Redis is needed by any limiter
 	needsRedis := false
 	for _, cfg := range cfgFile.Limiters {
 		if cfg.Backend == config.Redis {
@@ -38,8 +71,6 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, err
 	}
 
 	if needsRedis {
-		// Find the first Redis config to initialize the client (assuming all Redis configs use the same client)
-		// A more robust solution might handle different Redis configs/clients.
 		var redisCfg *config.LimiterConfig
 		for _, cfg := range cfgFile.Limiters {
 			if cfg.Backend == config.Redis {
@@ -48,13 +79,12 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, err
 			}
 		}
 		if redisCfg == nil {
-			// This case should ideally not happen if needsRedis is true, but as a safeguard
-			return nil, fmt.Errorf("logic error: needsRedis is true but no Redis config found")
+			return nil, nil, fmt.Errorf("logic error: needsRedis is true but no Redis config found") // Updated return
 		}
 
 		redisClient, err = apiinternal.InitRedisClient(redisCfg)
 		if err != nil {
-			return nil, err // initRedisClient already wraps the error
+			return nil, nil, err // Updated return
 		}
 		backendClients.RedisClient = redisClient
 	}
@@ -62,44 +92,31 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, err
 	// Add initialization for other backends here if needed by the config
 	// if anyCfg.Backend == config.Memcache { ... }
 
-	// Create a map to hold the initialized limiters
 	limiters := make(map[string]types.Limiter)
 
-	// Iterate through each limiter configuration and create the limiter instance
 	for _, cfg := range cfgFile.Limiters {
 		if cfg.Key == "" {
-			return nil, fmt.Errorf("limiter configuration missing 'key' field")
+			return nil, nil, fmt.Errorf("limiter configuration missing 'key' field") // Updated return
 		}
 
-		// Get the appropriate factory for this limiter's algorithm
 		factory, err := NewFactory(cfg)
 		if err != nil {
-			// Include the key in the error for easier debugging
-			return nil, fmt.Errorf("limiter '%s': %w", cfg.Key, err)
+			return nil, nil, fmt.Errorf("limiter '%s': %w", cfg.Key, err) // Updated return
 		}
 
-		// Create the limiter instance using the factory and the initialized clients
 		limiter, err := factory.CreateLimiter(cfg, backendClients)
 		if err != nil {
-			// Include the key in the error for easier debugging
-			return nil, fmt.Errorf("limiter '%s': %w", cfg.Key, err)
+			return nil, nil, fmt.Errorf("limiter '%s': %w", cfg.Key, err) // Updated return
 		}
 
-		// Store the created limiter in the map
 		limiters[cfg.Key] = limiter
 		log.Printf("Limiter '%s' initialized: Algorithm=%s, Backend=%s", cfg.Key, cfg.Algorithm, cfg.Backend)
 	}
 
-	// Note: Backend clients (like redisClient) are created here.
-	// If the consumer needs to gracefully shut down, this function might need
-	// to return the clients as well, or provide a Close() method on the Limiter
-	// interface that handles closing underlying connections.
-	// For simplicity now, we won't return clients, assuming they might be managed
-	// internally by the limiter implementation or left open. A robust library
-	// would need a shutdown mechanism.
-
-	return limiters, nil
+	// Return the map of limiters and the clientCloser
+	closer := &clientCloser{clients: backendClients}
+	return limiters, closer, nil // Updated return
 }
 
 // You could also add a function that takes the config struct directly:
-// func NewLimitersFromConfigStruct(cfg ConfigFile) (map[string]Limiter, error) { ... }
+// func NewLimitersFromConfigStruct(cfg ConfigFile) (map[string]types.Limiter, io.Closer, error) { ... }

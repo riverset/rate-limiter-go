@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"fmt" // Import io for the Closer interface
 	"log"
 	"net"
 	"net/http"
@@ -11,24 +11,27 @@ import (
 	ratelimiter "learn.ratelimiter/api"
 	"learn.ratelimiter/metrics"
 	"learn.ratelimiter/middleware"
+	// Import types to use types.Limiter
 )
 
 func main() {
-	// Use the new function to initialize multiple limiters
-	limiters, err := ratelimiter.NewLimitersFromConfigPath("config.yaml")
+	// Use the new function to initialize multiple limiters and get the closer
+	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath("config.yaml") // Updated variables
 	if err != nil {
 		log.Fatalf("Error initializing rate limiters from config: %v", err)
 	}
+	// Defer the Close method on the returned closer
+	defer closer.Close()
 
 	log.Println("Rate limiters successfully initialized from config.")
 
-	// Retrieve specific limiters by their key
-	apiRateLimiter, ok := limiters["api_rate_limit"]
+	// Retrieve specific limiters from the map
+	apiRateLimiter, ok := limiters["api_rate_limit"] // Access from the returned map
 	if !ok {
 		log.Fatalf("Rate limiter with key 'api_rate_limit' not found in config")
 	}
 
-	userLoginRateLimiter, ok := limiters["user_login_rate_limit"]
+	userLoginRateLimiter, ok := limiters["user_login_rate_limit"] // Access from the returned map
 	if !ok {
 		log.Fatalf("Rate limiter with key 'user_login_rate_limit' not found in config")
 	}
