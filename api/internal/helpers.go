@@ -13,19 +13,23 @@ import (
 	"learn.ratelimiter/config"
 )
 
+// ConfigFile represents the top-level structure of the configuration file.
+type ConfigFile struct {
+	Limiters []config.LimiterConfig `yaml:"limiters"`
+}
+
 // loadConfig reads and unmarshals the YAML config.
-func LoadConfig(path string) (*config.LimiterConfig, error) {
+// It now expects a list of limiters under the 'limiters' key.
+func LoadConfig(path string) (*ConfigFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
-	var cfg struct {
-		Limiter config.LimiterConfig `yaml:"limiter"`
-	}
+	var cfg ConfigFile // Unmarshal into the new struct
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
-	return &cfg.Limiter, nil
+	return &cfg, nil
 }
 
 // initRedisClient initializes and pings a Redis client based on config.
