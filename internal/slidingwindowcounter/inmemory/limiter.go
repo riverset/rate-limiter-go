@@ -46,7 +46,6 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	currentCounter, ok := tempCounter.(*slidingWindowCounter)
 	if !ok {
 		err := fmt.Errorf("unexpected state type for identifier %s in in-memory limiter '%s'", identifier, l.key)
-		// Added limiter key and identifier to error log
 		log.Error().Err(err).Str("limiter_type", "SlidingWindowCounter").Str("backend", "InMemory").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Error in Allow")
 		return false, err
 	}
@@ -56,34 +55,39 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	// Check if context is cancelled before proceeding
 	select {
 	case <-ctx.Done():
-		// Added limiter key and identifier to log
 		log.Warn().Err(ctx.Err()).Str("limiter_type", "SlidingWindowCounter").Str("backend", "InMemory").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Context cancelled during check")
 		return false, ctx.Err()
 	default:
 		// Continue
 	}
 
-	timeSinceWindowStart := time.Since(currentCounter.currentWindowStart)
+	now := time.Now()
 
-	if timeSinceWindowStart >= l.windowSize {
-		if timeSinceWindowStart < 2*l.windowSize {
-			currentCounter.previousWindowCount = currentCounter.currentWindowCount
-			currentCounter.currentWindowCount = 0
-		} else {
-			currentCounter.currentWindowCount = 0
+	// Slide the window if necessary
+	for now.Sub(currentCounter.currentWindowStart) >= l.windowSize {
+		currentCounter.previousWindowCount = currentCounter.currentWindowCount
+		currentCounter.currentWindowCount = 0
+		currentCounter.currentWindowStart = currentCounter.currentWindowStart.Add(l.windowSize)
+		// If the time elapsed is more than twice the window size, reset both counts
+		if now.Sub(currentCounter.currentWindowStart) >= l.windowSize {
 			currentCounter.previousWindowCount = 0
 		}
-		currentCounter.currentWindowStart = time.Now().Truncate(l.windowSize)
-		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart) // Recalculate after truncating
 	}
 
-	// Calculate the weighted total requests, considering the elapsed time
-	weightCurrentWindow := timeSinceWindowStart.Seconds() / l.windowSize.Seconds()
-	weightPreviousWindow := 1 - weightCurrentWindow
-	totalRequests := weightCurrentWindow*float64(currentCounter.currentWindowCount) + weightPreviousWindow*float64(currentCounter.previousWindowCount)
+	// Calculate the weighted total requests in the sliding window [now - windowSize, now]
+	// This window overlaps with the previous bucket [currentWindowStart - windowSize, currentWindowStart]
+	// and the current bucket [currentWindowStart, now].
 
-	// Check if the total requests exceed the limit
-	if totalRequests < float64(l.limit) {
+	// Time elapsed in the current window [currentWindowStart, now]
+	timeInCurrentWindow := now.Sub(currentCounter.currentWindowStart)
+	// Percentage of the previous bucket that overlaps with the sliding window
+	percentagePreviousOverlap := float64(l.windowSize-timeInCurrentWindow) / float64(l.windowSize)
+
+	// Total requests in the sliding window
+	totalRequests := float64(currentCounter.currentWindowCount) + float64(currentCounter.previousWindowCount)*percentagePreviousOverlap
+
+	// Check if allowing the current request would exceed the limit
+	if totalRequests+1 <= float64(l.limit) {
 		currentCounter.currentWindowCount++
 		return true, nil
 	}
@@ -95,7 +99,7 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 func (l *limiter) initializeWindowCounter(previousWindowCount int) *slidingWindowCounter {
 	return &slidingWindowCounter{
 		previousWindowCount: previousWindowCount,
-		currentWindowCount:  0, // Initialize current count to 0 before incrementing in Allow
-		currentWindowStart:  time.Now().Truncate(l.windowSize),
+		currentWindowCount:  0,
+		currentWindowStart:  time.Now(), // Initial window starts now
 	}
 }

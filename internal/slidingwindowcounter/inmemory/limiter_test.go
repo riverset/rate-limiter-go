@@ -10,56 +10,65 @@ import (
 )
 
 func TestSlidingWindowLimiter(t *testing.T) {
-	limiter := swinmemory.NewLimiter("test_sliding_window", 100*time.Millisecond, 3)
-	ctx := context.Background()
+	t.Run("SlidingWindowBehavior", func(t *testing.T) {
+		limiter := swinmemory.NewLimiter("test_sliding_window_behavior", 100*time.Millisecond, 3)
+		ctx := context.Background()
 
-	// Test allowing requests within the limit
-	for i := 0; i < 3; i++ {
-		allowed, err := limiter.Allow(ctx, "user1")
+		// Fill the window
+		for i := 0; i < 3; i++ {
+			allowed, err := limiter.Allow(ctx, "user_sliding")
+			if err != nil {
+				t.Fatalf("Allow failed: %v", err)
+			}
+			if !allowed {
+				t.Fatalf("Request %d unexpectedly denied", i+1)
+			}
+		}
+
+		// Attempt one more request, should be denied
+		allowed, err := limiter.Allow(ctx, "user_sliding")
+		if err != nil {
+			t.Fatalf("Allow failed: %v", err)
+		}
+		if allowed {
+			t.Fatalf("Request unexpectedly allowed after limit")
+		}
+
+		time.Sleep(120 * time.Millisecond) // Move more than 1 into the window
+
+		// After 120ms, the weighted count should be 2.4.
+		// Allowing one more request would make it 3.4, exceeding the limit of 3.
+		// Both subsequent requests should be denied.
+
+		// Attempt one more request, should be denied
+		allowed, err = limiter.Allow(ctx, "user_sliding")
+		if err != nil {
+			t.Fatalf("Allow failed: %v", err)
+		}
+		if allowed {
+			t.Fatalf("Request unexpectedly allowed after 120ms sleep")
+		}
+
+		// Attempt another request, should also be denied
+		allowed, err = limiter.Allow(ctx, "user_sliding")
+		if err != nil {
+			t.Fatalf("Allow failed: %v", err)
+		}
+		if allowed {
+			t.Fatalf("Request unexpectedly allowed after previous denial")
+		}
+	})
+
+	t.Run("DifferentIdentifier", func(t *testing.T) {
+		limiter := swinmemory.NewLimiter("test_sliding_window_different", 100*time.Millisecond, 3)
+		ctx := context.Background()
+
+		allowed, err := limiter.Allow(ctx, "user2")
 		if err != nil {
 			t.Fatalf("Allow failed: %v", err)
 		}
 		if !allowed {
-			t.Fatalf("Request %d unexpectedly denied", i+1)
+			t.Fatalf("Request for different identifier unexpectedly denied")
 		}
-	}
-
-	// Test denying requests over the limit within the same window
-	allowed, err := limiter.Allow(ctx, "user1")
-	if err != nil {
-		t.Fatalf("Allow failed: %v", err)
-	}
-	if allowed {
-		t.Fatalf("Request unexpectedly allowed after limit")
-	}
-
-	// Test sliding window behavior (this is a basic test, more comprehensive tests needed)
-	time.Sleep(50 * time.Millisecond) // Move halfway into the window
-
-	// Allow one more request, the oldest one should be just outside the window
-	allowed, err = limiter.Allow(ctx, "user1")
-	if err != nil {
-		t.Fatalf("Allow failed: %v", err)
-	}
-	if !allowed {
-		t.Fatalf("Request unexpectedly denied in sliding window")
-	}
-
-	// Deny the next request
-	allowed, err = limiter.Allow(ctx, "user1")
-	if err != nil {
-		t.Fatalf("Allow failed: %v", err)
-	}
-	if allowed {
-		t.Fatalf("Request unexpectedly allowed in sliding window after limit")
-	}
-
-	// Test a different identifier
-	allowed, err = limiter.Allow(ctx, "user2")
-	if err != nil {
-		t.Fatalf("Allow failed: %v", err)
-	}
-	if !allowed {
-		t.Fatalf("Request for different identifier unexpectedly denied")
-	}
+	})
 }
