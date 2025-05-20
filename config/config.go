@@ -67,6 +67,14 @@ type RedisBackendConfig struct {
 	Password string `yaml:"password,omitempty"`
 	// DB is the Redis database to use (optional).
 	DB int `yaml:"db,omitempty"`
+	// PoolSize is the maximum number of connections in the connection pool.
+	PoolSize int `yaml:"pool_size,omitempty"`
+	// DialTimeout is the timeout for establishing a connection.
+	DialTimeout time.Duration `yaml:"dial_timeout,omitempty"`
+	// ReadTimeout is the timeout for reading from the server.
+	ReadTimeout time.Duration `yaml:"read_timeout,omitempty"`
+	// WriteTimeout is the timeout for writing to the server.
+	WriteTimeout time.Duration `yaml:"write_timeout,omitempty"`
 }
 
 // MemcacheBackendConfig holds parameters for the Memcache backend.

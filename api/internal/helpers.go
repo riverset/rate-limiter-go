@@ -38,7 +38,77 @@ func LoadConfig(path string) (*ConfigFile, error) {
 		return nil, fmt.Errorf("unmarshal config file %s: %w", path, err)
 	}
 	log.Info().Str("config_path", path).Msg("Helpers: Configuration loaded successfully")
+
+	// Validate the loaded configuration
+	log.Info().Msg("Helpers: Validating configuration")
+	if err := validateConfig(&cfg); err != nil {
+		log.Error().Err(err).Msg("Helpers: Configuration validation failed")
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
+	log.Info().Msg("Helpers: Configuration validated successfully")
 	return &cfg, nil
+}
+
+// validateConfig performs validation checks on the loaded configuration.
+func validateConfig(cfg *ConfigFile) error {
+	if cfg == nil || len(cfg.Limiters) == 0 {
+		return fmt.Errorf("no rate limiters defined in configuration")
+	}
+
+	for _, limiterCfg := range cfg.Limiters {
+		if limiterCfg.Key == "" {
+			return fmt.Errorf("limiter key is required for all limiters")
+		}
+
+		switch limiterCfg.Algorithm {
+		case config.TokenBucket:
+			if limiterCfg.TokenBucketParams == nil {
+				return fmt.Errorf("token_bucket_params are required for token_bucket limiter '%s'", limiterCfg.Key)
+			}
+			if limiterCfg.TokenBucketParams.Rate <= 0 {
+				return fmt.Errorf("rate must be a positive integer for token_bucket limiter '%s'", limiterCfg.Key)
+			}
+			if limiterCfg.TokenBucketParams.Capacity <= 0 {
+				return fmt.Errorf("capacity must be a positive integer for token_bucket limiter '%s'", limiterCfg.Key)
+			}
+		case config.FixedWindowCounter, config.SlidingWindowCounter:
+			if limiterCfg.WindowParams == nil {
+				return fmt.Errorf("window_params are required for %s limiter '%s'", limiterCfg.Algorithm, limiterCfg.Key)
+			}
+			if limiterCfg.WindowParams.Window <= 0 {
+				return fmt.Errorf("window duration must be positive for %s limiter '%s'", limiterCfg.Algorithm, limiterCfg.Key)
+			}
+			if limiterCfg.WindowParams.Limit <= 0 {
+				return fmt.Errorf("limit must be a positive integer for %s limiter '%s'", limiterCfg.Algorithm, limiterCfg.Key)
+			}
+		default:
+			return fmt.Errorf("unsupported algorithm type '%s' for limiter '%s'", limiterCfg.Algorithm, limiterCfg.Key)
+		}
+
+		switch limiterCfg.Backend {
+		case config.InMemory:
+			// No specific backend params to validate for in-memory
+		case config.Redis:
+			if limiterCfg.RedisParams == nil {
+				return fmt.Errorf("redis_params are required for redis backend for limiter '%s'", limiterCfg.Key)
+			}
+			if limiterCfg.RedisParams.Address == "" {
+				return fmt.Errorf("redis address is required for redis backend for limiter '%s'", limiterCfg.Key)
+			}
+		case config.Memcache:
+			if limiterCfg.MemcacheParams == nil {
+				return fmt.Errorf("memcache_params are required for memcache backend for limiter '%s'", limiterCfg.Key)
+			}
+			if len(limiterCfg.MemcacheParams.Addresses) == 0 || limiterCfg.MemcacheParams.Addresses[0] == "" {
+				return fmt.Errorf("at least one memcache address is required for memcache backend for limiter '%s'", limiterCfg.Key)
+			}
+		default:
+			return fmt.Errorf("unsupported backend type '%s' for limiter '%s'", limiterCfg.Backend, limiterCfg.Key)
+		}
+	}
+
+	return nil
 }
 
 // InitRedisClient initializes and pings a Redis client based on the provided limiter configuration.
@@ -51,10 +121,13 @@ func InitRedisClient(cfg *config.LimiterConfig) (*redis.Client, error) {
 		return nil, err
 	}
 	client := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisParams.Address,
-		Password: cfg.RedisParams.Password,
-		DB:       cfg.RedisParams.DB,
-		// Add other options like PoolSize, DialTimeout, ReadTimeout, WriteTimeout
+		Addr:         cfg.RedisParams.Address,
+		Password:     cfg.RedisParams.Password,
+		DB:           cfg.RedisParams.DB,
+		PoolSize:     cfg.RedisParams.PoolSize,
+		DialTimeout:  cfg.RedisParams.DialTimeout,
+		ReadTimeout:  cfg.RedisParams.ReadTimeout,
+		WriteTimeout: cfg.RedisParams.WriteTimeout,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
