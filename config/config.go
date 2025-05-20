@@ -53,7 +53,7 @@ type WindowConfig struct {
 
 // TokenBucketConfig holds parameters for the Token Bucket algorithm.
 type TokenBucketConfig struct {
-	// Rate is the number of tokens to add to the bucket per unit of time.
+	// Rate is the number of tokens to add to the bucket per second.
 	Rate int `yaml:"rate"`
 	// Capacity is the maximum number of tokens the bucket can hold.
 	Capacity int `yaml:"capacity"`

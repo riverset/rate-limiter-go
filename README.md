@@ -93,7 +93,6 @@ To set up the project, follow these steps:
         backend: "redis"
         capacity: 100
         rate: 10
-        unit: "second" # Note: The 'unit' field is currently illustrative in config; the code assumes rate is per second for Token Bucket. See development notes.
         redis:
           address: "localhost:6379"
           password: ""
@@ -127,7 +126,7 @@ In addition to the common fields, each algorithm requires specific configuration
 
 *   **Token Bucket (`token_bucket`):**
     *   `capacity` (integer, required): The maximum number of tokens the bucket can hold.
-    *   `rate` (integer, required): The number of tokens to add to the bucket per second. (Note: The `unit` field in the example config is currently illustrative; the code implements rate as tokens per second).
+    *   `rate` (integer, required): The number of tokens to add to the bucket per second.
 
 *   **Fixed Window Counter (`fixed_window_counter`) & Sliding Window Counter (`sliding_window_counter`):**
     *   `window` (string, required): The duration of the window (e.g., "60s", "1m", "5m"). Must be a valid Go time.Duration string.

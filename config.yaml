@@ -19,3 +19,30 @@ limiters:
       address: "localhost:6379"
       password: ""
       db: 0
+      pool_size: 10
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
+
+  - key: "token_bucket_example"
+    algorithm: "token_bucket"
+    backend: "in_memory"
+    token_bucket_params:
+      rate: 10 # tokens per second
+      capacity: 50
+
+  # Example with Redis backend for Token Bucket
+  - key: "token_bucket_redis_example"
+    algorithm: "token_bucket"
+    backend: "redis"
+    token_bucket_params:
+      rate: 5 # tokens per second
+      capacity: 20
+    redis_params:
+      address: "localhost:6379"
+      password: ""
+      db: 0
+      pool_size: 10
+      dial_timeout: 5s
+      read_timeout: 3s
+      write_timeout: 3s
