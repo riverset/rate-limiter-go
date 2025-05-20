@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog/log" // Import zerolog's global logger
 
+	"learn.ratelimiter/config"
 	"learn.ratelimiter/metrics"
 	"learn.ratelimiter/types"
 )
@@ -18,15 +19,18 @@ type RateLimitMiddleware struct {
 	metrics *metrics.RateLimitMetrics
 	// limiterKey is the key associated with this limiter configuration.
 	limiterKey string
+	// algorithm is the rate limiting algorithm used by this limiter.
+	algorithm config.AlgorithmType
 }
 
 // NewRateLimitMiddleware creates a new RateLimitMiddleware.
-// It takes a types.Limiter, a metrics.RateLimitMetrics collector, and a unique key for the limiter.
-func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics, limiterKey string) *RateLimitMiddleware {
+// It takes a types.Limiter, a metrics.RateLimitMetrics collector, a unique key for the limiter, and the algorithm type.
+func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics, limiterKey string, algorithm config.AlgorithmType) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
 		limiter:    limiter,
 		metrics:    metrics,
 		limiterKey: limiterKey,
+		algorithm:  algorithm,
 	}
 }
 
@@ -41,7 +45,7 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 			log.Warn().Str("limiter_key", m.limiterKey).Str("remote_addr", r.RemoteAddr).Msg("Middleware: Could not extract identifier for request")
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Error().Str("limiter_key", m.limiterKey).Str("remote_addr", r.RemoteAddr).Msg("Middleware: Request denied due to missing identifier")
-			m.metrics.RecordRequest(false)
+			m.metrics.RecordRequestWithLabels(false, m.limiterKey, string(m.algorithm))
 			return
 		}
 
@@ -53,11 +57,11 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 			w.WriteHeader(http.StatusInternalServerError)
 			// Include limiter key and identifier in denial log
 			log.Error().Str("limiter_key", m.limiterKey).Str("identifier", identifier).Msg("Middleware: Request denied due to limiter error")
-			m.metrics.RecordRequest(false)
+			m.metrics.RecordRequestWithLabels(false, m.limiterKey, string(m.algorithm))
 			return
 		}
 
-		m.metrics.RecordRequest(allowed)
+		m.metrics.RecordRequestWithLabels(allowed, m.limiterKey, string(m.algorithm))
 
 		if allowed {
 			next.ServeHTTP(w, r)

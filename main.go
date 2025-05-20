@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os" // Import os for stderr
 	"strings"
-	"sync/atomic"
 	"time" // Import time for zerolog
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"     // Import zerolog
 	"github.com/rs/zerolog/log" // Import zerolog's global logger
 
@@ -45,7 +45,7 @@ func main() {
 	log.Info().Str("config_path", *configPath).Msg("Starting application initialization")
 
 	// Use the new function to initialize multiple limiters and get the closer
-	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath(*configPath)
+	limiters, limiterConfigs, closer, err := ratelimiter.NewLimitersFromConfigPath(*configPath)
 	if err != nil {
 		// Use logger.Fatal for fatal errors
 		log.Fatal().Err(err).Str("config_path", *configPath).Msg("Application startup failed: Error initializing rate limiters from config")
@@ -62,6 +62,10 @@ func main() {
 		// Use logger.Fatal for fatal errors
 		log.Fatal().Str("limiter_key", apiRateLimiterKey).Msg("Application startup failed: Rate limiter key not found in config")
 	}
+	apiRateLimiterConfig, ok := limiterConfigs[apiRateLimiterKey]
+	if !ok {
+		log.Fatal().Str("limiter_key", apiRateLimiterKey).Msg("Application startup failed: Rate limiter config not found")
+	}
 
 	userLoginRateLimiterKey := "user_login_rate_limit_distributed"
 	userLoginRateLimiter, ok := limiters[userLoginRateLimiterKey]
@@ -69,14 +73,18 @@ func main() {
 		// Use logger.Fatal for fatal errors
 		log.Fatal().Str("limiter_key", userLoginRateLimiterKey).Msg("Application startup failed: Rate limiter key not found in config")
 	}
+	userLoginRateLimiterConfig, ok := limiterConfigs[userLoginRateLimiterKey]
+	if !ok {
+		log.Fatal().Str("limiter_key", userLoginRateLimiterKey).Msg("Application startup failed: Rate limiter config not found")
+	}
 
 	// You can now use different limiters for different routes or logic
 	apiMetrics := metrics.NewRateLimitMetrics()
 	userLoginMetrics := metrics.NewRateLimitMetrics()
 
-	// Pass the limiter key to the middleware constructor
-	apiRateLimitMiddleware := middleware.NewRateLimitMiddleware(apiRateLimiter, apiMetrics, apiRateLimiterKey)
-	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics, userLoginRateLimiterKey)
+	// Pass the limiter key and algorithm to the middleware constructor
+	apiRateLimitMiddleware := middleware.NewRateLimitMiddleware(apiRateLimiter, apiMetrics, apiRateLimiterKey, apiRateLimiterConfig.Algorithm)
+	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics, userLoginRateLimiterKey, userLoginRateLimiterConfig.Algorithm)
 
 	http.HandleFunc("/unlimited", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -95,18 +103,8 @@ func main() {
 		fmt.Fprintln(w, "Login attempt processed!")
 	}, getClientIP))
 
-	// Update metrics endpoint to show metrics for both limiters
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "--- API Rate Limit Metrics ---")
-		fmt.Fprintf(w, "Total Requests: %d\n", atomic.LoadInt32(&apiMetrics.TotalRequests))
-		fmt.Fprintf(w, "Allowed Requests: %d\n", atomic.LoadInt32(&apiMetrics.AllowedRequests))
-		fmt.Fprintf(w, "Rejected Requests: %d\n", atomic.LoadInt32(&apiMetrics.RejectedRequests))
-
-		fmt.Fprintln(w, "\n--- User Login Rate Limit Metrics ---")
-		fmt.Fprintf(w, "Total Requests: %d\n", atomic.LoadInt32(&userLoginMetrics.TotalRequests))
-		fmt.Fprintf(w, "Allowed Requests: %d\n", atomic.LoadInt32(&userLoginMetrics.AllowedRequests))
-		fmt.Fprintf(w, "Rejected Requests: %d\n", atomic.LoadInt32(&userLoginMetrics.RejectedRequests))
-	})
+	// Expose Prometheus metrics endpoint
+	http.Handle("/metrics", promhttp.Handler())
 
 	// Construct the address string using the parsed port
 	addr := fmt.Sprintf(":%d", *port)

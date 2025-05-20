@@ -56,21 +56,21 @@ func (c *clientCloser) Close() error {
 }
 
 // NewLimitersFromConfigPath loads configuration from the given path, initializes any needed backend clients,
-// and returns a map of rate limiters keyed by their configuration key, and an io.Closer for backend clients.
+// and returns a map of rate limiters keyed by their configuration key, a map of configurations keyed by their key, and an io.Closer for backend clients.
 // It returns an error if configuration loading or client/limiter initialization fails.
-func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.Closer, error) {
+func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, map[string]config.LimiterConfig, io.Closer, error) {
 	log.Info().Str("config_path", configPath).Msg("API: Starting initialization of rate limiters from config path")
 	cfgFile, err := apiinternal.LoadConfig(configPath)
 	if err != nil {
 		// Improved error log with structured fields
 		log.Error().Err(err).Str("config_path", configPath).Msg("API: Initialization failed: Error loading configuration")
-		return nil, nil, fmt.Errorf("error loading configuration: %w", err)
+		return nil, nil, nil, fmt.Errorf("error loading configuration: %w", err)
 	}
 
 	if len(cfgFile.Limiters) == 0 {
 		// Improved log with structured fields
 		log.Error().Str("config_path", configPath).Msg("API: Initialization failed: No limiter configurations found")
-		return nil, nil, fmt.Errorf("no limiter configurations found in %s", configPath)
+		return nil, nil, nil, fmt.Errorf("no limiter configurations found in %s", configPath)
 	}
 
 	backendClients := types.BackendClients{}
@@ -86,25 +86,26 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 
 	if needsRedis {
 		log.Info().Msg("API: Redis backend required for one or more limiters. Initializing Redis client...")
+		// Find the first Redis config to initialize the client
 		var redisCfg *config.LimiterConfig
 		for _, cfg := range cfgFile.Limiters {
-			if cfg.Backend == config.Redis {
+			if cfg.Backend == config.Redis && cfg.RedisParams != nil {
 				redisCfg = &cfg
 				break
 			}
 		}
+		// If no Redis config with params is found, return an error
 		if redisCfg == nil {
-			// This case should ideally not happen if needsRedis is true, but as a safeguard
-			err := fmt.Errorf("logic error: needsRedis is true but no Redis config found")
+			err := fmt.Errorf("redis backend specified but no valid redis_params found in config")
 			log.Error().Err(err).Msg("API: Initialization failed")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		redisClient, err = apiinternal.InitRedisClient(redisCfg)
 		if err != nil {
 			// Improved error log with structured fields
 			log.Error().Err(err).Msg("API: Initialization failed: Failed to initialize Redis client")
-			return nil, nil, err // initRedisClient already wraps the error
+			return nil, nil, nil, err // initRedisClient already wraps the error
 		}
 		backendClients.RedisClient = redisClient
 	}
@@ -113,6 +114,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 	// if anyCfg.Backend == config.Memcache { ... }
 
 	limiters := make(map[string]types.Limiter)
+	limiterConfigs := make(map[string]config.LimiterConfig)
 
 	log.Info().Int("count", len(cfgFile.Limiters)).Msg("API: Creating limiter instances...")
 	for _, cfg := range cfgFile.Limiters {
@@ -121,7 +123,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 			err := fmt.Errorf("limiter configuration missing 'key' field")
 			// Improved error log with structured fields
 			log.Error().Err(err).Msg("API: Initialization failed for a limiter")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		limiterFactory, err := NewLimiterFactory(cfg)
@@ -129,7 +131,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 			err = fmt.Errorf("limiter '%s': failed to get factory: %w", cfg.Key, err)
 			// Improved error log with structured fields
 			log.Error().Err(err).Str("limiter_key", cfg.Key).Msg("API: Initialization failed: Failed to get factory")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		limiter, err := limiterFactory.CreateLimiter(cfg, backendClients)
@@ -137,10 +139,11 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 			err = fmt.Errorf("limiter '%s': failed to create instance: %w", cfg.Key, err)
 			// Improved error log with structured fields
 			log.Error().Err(err).Str("limiter_key", cfg.Key).Msg("API: Initialization failed: Failed to create instance")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		limiters[cfg.Key] = limiter
+		limiterConfigs[cfg.Key] = cfg // Store the config as well
 		// Improved success log with structured fields
 		log.Info().Str("limiter_key", cfg.Key).Str("algorithm", string(cfg.Algorithm)).Str("backend", string(cfg.Backend)).Msg("API: Limiter created successfully.")
 	}
@@ -148,7 +151,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 	log.Info().Msg("API: All rate limiters initialized.")
 
 	closer := &clientCloser{clients: backendClients}
-	return limiters, closer, nil
+	return limiters, limiterConfigs, closer, nil
 }
 
 // You could also add a function that takes the config struct directly:
