@@ -9,8 +9,8 @@ import (
 	"learn.ratelimiter/types"
 )
 
-// NewFactory returns a concrete LimiterFactory based on the algorithm.
-func NewFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
+// NewLimiterFactory returns a concrete LimiterFactory based on the algorithm.
+func NewLimiterFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
 	log.Printf("Getting factory for algorithm '%s'", cfg.Algorithm)
 	switch cfg.Algorithm {
 	case config.FixedWindowCounter:

@@ -114,14 +114,14 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 			return nil, nil, err
 		}
 
-		factory, err := NewFactory(cfg)
+		limiterFactory, err := NewLimiterFactory(cfg)
 		if err != nil {
 			err = fmt.Errorf("limiter '%s': failed to get factory: %w", cfg.Key, err)
 			log.Printf("Initialization failed for limiter '%s': %v", cfg.Key, err)
 			return nil, nil, err
 		}
 
-		limiter, err := factory.CreateLimiter(cfg, backendClients)
+		limiter, err := limiterFactory.CreateLimiter(cfg, backendClients)
 		if err != nil {
 			err = fmt.Errorf("limiter '%s': failed to create instance: %w", cfg.Key, err)
 			log.Printf("Initialization failed for limiter '%s': %v", cfg.Key, err)
