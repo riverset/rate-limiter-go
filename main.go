@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt" // Import io for the Closer interface
+	"flag" // Import the flag package
+	"fmt"  // Import io for the Closer interface
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +16,12 @@ import (
 )
 
 func main() {
+	// Define a flag for the port, defaulting to 8080
+	port := flag.Int("p", 8080, "Port to run the HTTP server on")
+
+	// Parse the command-line flags
+	flag.Parse()
+
 	// Use the new function to initialize multiple limiters and get the closer
 	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath("config.yaml") // Updated variables
 	if err != nil {
@@ -33,7 +40,7 @@ func main() {
 
 	userLoginRateLimiter, ok := limiters["user_login_rate_limit_distributed"] // Access from the returned map
 	if !ok {
-		log.Fatalf("Rate limiter with key 'user_login_rate_limit' not found in config")
+		log.Fatalf("Rate limiter with key 'user_login_rate_limit_distributed' not found in config") // Updated error message
 	}
 
 	// You can now use different limiters for different routes or logic
@@ -73,8 +80,10 @@ func main() {
 		fmt.Fprintf(w, "Rejected Requests: %d\n", atomic.LoadInt32(&userLoginMetrics.RejectedRequests))
 	})
 
-	log.Println("Starting server on :8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Construct the address string using the parsed port
+	addr := fmt.Sprintf(":%d", *port)
+	log.Printf("Starting server on %s...", addr) // Use Printf for formatting
+	log.Fatal(http.ListenAndServe(addr, nil))    // Use the constructed address
 }
 
 func getClientIP(r *http.Request) string {
