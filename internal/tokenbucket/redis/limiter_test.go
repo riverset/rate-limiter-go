@@ -4,6 +4,7 @@ package tbredis_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -14,8 +15,14 @@ import (
 // setupRedisClient initializes a Redis client for testing.
 // It assumes a Redis instance is running on the default address.
 func setupRedisClient(t *testing.T) *redis.Client {
+	redisAddr := "localhost:6379"
+	// Check if running in GitHub Actions CI
+	if os.Getenv("CI") == "true" {
+		redisAddr = "redis:6379"
+	}
+
 	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Default Redis address
+		Addr: redisAddr, // Use the determined Redis address
 		DB:   0,
 	})
 
