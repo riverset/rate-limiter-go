@@ -1,5 +1,5 @@
-// Package inmemory_test contains tests for the in-memory fixed window counter.
-package inmemory_test
+// Package fcinmemory_test contains tests for the in-memory fixed window counter.
+package fcinmemory_test
 
 import (
 	"context"

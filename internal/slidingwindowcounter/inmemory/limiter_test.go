@@ -1,16 +1,16 @@
-// Package inmemory_test contains tests for the in-memory sliding window counter.
-package inmemory_test
+// Package swinmemory_test contains tests for the in-memory sliding window counter.
+package swinmemory_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	swcinmemory "learn.ratelimiter/internal/slidingwindowcounter/inmemory"
+	swinmemory "learn.ratelimiter/internal/slidingwindowcounter/inmemory"
 )
 
 func TestSlidingWindowLimiter(t *testing.T) {
-	limiter := swcinmemory.NewLimiter("test_sliding_window", 100*time.Millisecond, 3)
+	limiter := swinmemory.NewLimiter("test_sliding_window", 100*time.Millisecond, 3)
 	ctx := context.Background()
 
 	// Test allowing requests within the limit
