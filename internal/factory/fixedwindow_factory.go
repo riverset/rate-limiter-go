@@ -14,15 +14,15 @@ import (
 type FixedWindowFactory struct{}
 
 // NewFixedWindowFactory returns a new FixedWindowFactory instance.
-func NewFixedWindowFactory() *FixedWindowFactory {
-	return &FixedWindowFactory{}
+func NewFixedWindowFactory() (*FixedWindowFactory, error) {
+	return &FixedWindowFactory{}, nil
 }
 
 // CreateLimiter creates a Fixed Window Counter limiter based on the configuration and clients.
 // It now returns types.Limiter and accepts types.BackendClients.
 func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
 	log.Printf("Creating Fixed Window Counter limiter for key '%s' with backend '%s'", cfg.Key, cfg.Backend)
-	if cfg.FixedWindowCounterParams == nil {
+	if cfg.WindowParams == nil {
 		err := fmt.Errorf("fixed window counter parameters are missing in config for key '%s'", cfg.Key)
 		log.Printf("Creation failed: %v", err)
 		return nil, err
@@ -30,7 +30,7 @@ func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients typ
 	switch cfg.Backend {
 	case config.InMemory:
 		log.Printf("Creating in-memory Fixed Window Counter limiter for key '%s'", cfg.Key)
-		return inmemoryfc.NewLimiter(cfg.Key, cfg.FixedWindowCounterParams.Window, cfg.FixedWindowCounterParams.Limit), nil
+		return inmemoryfc.NewLimiter(cfg.Key, cfg.WindowParams.Window, cfg.WindowParams.Limit), nil
 	case config.Redis:
 		log.Printf("Creating Redis Fixed Window Counter limiter for key '%s'", cfg.Key)
 		if clients.RedisClient == nil {
@@ -38,7 +38,7 @@ func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients typ
 			log.Printf("Creation failed: %v", err)
 			return nil, err
 		}
-		return redisfc.NewLimiter(clients.RedisClient, cfg.Key, cfg.FixedWindowCounterParams.Window, cfg.FixedWindowCounterParams.Limit), nil
+		return redisfc.NewLimiter(clients.RedisClient, cfg.Key, cfg.WindowParams.Window, cfg.WindowParams.Limit), nil
 	case config.Memcache:
 		err := fmt.Errorf("memcache backend not yet implemented for fixed window counter for key '%s'", cfg.Key)
 		log.Printf("Creation failed: %v", err)

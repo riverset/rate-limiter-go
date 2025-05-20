@@ -1,4 +1,4 @@
-package slidingwindowcounter
+package inmemory
 
 import (
 	"log"
@@ -7,9 +7,10 @@ import (
 )
 
 type limiter struct {
-	counter           sync.Map
-	windowSizeSeconds int
-	limit             int
+	key        string
+	counter    sync.Map
+	windowSize time.Duration
+	limit      int
 }
 
 type slidingWindowCounter struct {
@@ -19,11 +20,13 @@ type slidingWindowCounter struct {
 	mu                  sync.Mutex
 }
 
-func New(windowSizeSeconds, limit int) *limiter {
+func NewLimiter(key string, windowSize time.Duration, limit int) *limiter {
+	log.Printf("Initialized in-memory Sliding Window Counter limiter for key '%s' with window %s and limit %d", key, windowSize, limit)
 	return &limiter{
-		counter:           sync.Map{},
-		windowSizeSeconds: windowSizeSeconds,
-		limit:             limit,
+		key:        key,
+		counter:    sync.Map{},
+		windowSize: windowSize,
+		limit:      limit,
 	}
 }
 
@@ -38,21 +41,21 @@ func (l *limiter) Allow(identifier string) bool {
 	currentCounter.mu.Lock()
 	defer currentCounter.mu.Unlock()
 
-	timeSinceWindowStart := time.Since(currentCounter.currentWindowStart).Seconds()
+	timeSinceWindowStart := time.Since(currentCounter.currentWindowStart)
 
-	if timeSinceWindowStart >= float64(l.windowSizeSeconds) {
-		if timeSinceWindowStart < 2*float64(l.windowSizeSeconds) {
+	if timeSinceWindowStart >= l.windowSize {
+		if timeSinceWindowStart < 2*l.windowSize {
 			currentCounter.previousWindowCount = currentCounter.currentWindowCount
 			currentCounter.currentWindowCount = 0
 		} else {
 			currentCounter.currentWindowCount = 0
 			currentCounter.previousWindowCount = 0
 		}
-		currentCounter.currentWindowStart = time.Now().Truncate(time.Duration(l.windowSizeSeconds) * time.Second)
-		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart).Seconds()
+		currentCounter.currentWindowStart = time.Now().Truncate(l.windowSize)
+		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart)
 	}
 
-	weightCurrentWindow := timeSinceWindowStart / float64(l.windowSizeSeconds)
+	weightCurrentWindow := timeSinceWindowStart.Seconds() / l.windowSize.Seconds()
 	weightPreviousWindow := 1 - weightCurrentWindow
 	totalRequests := weightCurrentWindow*(float64(currentCounter.currentWindowCount)) + weightPreviousWindow*(float64(currentCounter.previousWindowCount))
 
@@ -69,6 +72,6 @@ func (l *limiter) initializeWindowCounter(previousWindowCount int) *slidingWindo
 	return &slidingWindowCounter{
 		previousWindowCount: previousWindowCount,
 		currentWindowCount:  1,
-		currentWindowStart:  time.Now().Truncate(time.Duration(l.windowSizeSeconds) * time.Second),
+		currentWindowStart:  time.Now().Truncate(l.windowSize),
 	}
 }

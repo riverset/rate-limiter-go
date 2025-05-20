@@ -6,7 +6,8 @@ import "time"
 type AlgorithmType string
 
 const (
-	FixedWindowCounter AlgorithmType = "fixed_window_counter"
+	FixedWindowCounter   AlgorithmType = "fixed_window_counter"
+	SlidingWindowCounter AlgorithmType = "sliding_window_counter"
 )
 
 // BackendType represents the storage backend.
@@ -24,14 +25,14 @@ type LimiterConfig struct {
 	Backend   BackendType   `yaml:"backend"`
 	Key       string        `yaml:"key"`
 
-	FixedWindowCounterParams *FixedWindowCounterConfig `yaml:"fixed_window_counter_params,omitempty"`
+	WindowParams *WindowConfig `yaml:"window_params,omitempty"`
 
 	RedisParams    *RedisBackendConfig    `yaml:"redis_params,omitempty"`
 	MemcacheParams *MemcacheBackendConfig `yaml:"memcache_params,omitempty"`
 }
 
 // FixedWindowCounterConfig holds parameters for the Fixed Window Counter algorithm.
-type FixedWindowCounterConfig struct {
+type WindowConfig struct {
 	Window time.Duration `yaml:"window"`
 	Limit  int64         `yaml:"limit"`
 }
