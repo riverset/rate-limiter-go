@@ -1,4 +1,4 @@
-package tokenbucket
+package tbinmemory
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type tokenBucket struct {
 	lastRefill time.Time
 }
 
-func New(rate, capacity int) *limiter {
+func NewLimiter(rate, capacity int) *limiter {
 	log.Printf("Initialized in-memory Token Bucket limiter with rate %d and capacity %d", rate, capacity)
 	return &limiter{
 		buckets:  make(map[string]*tokenBucket),
@@ -70,12 +70,4 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	}
 
 	return false, nil
-}
-
-// min is a helper function (Go 1.18+ has built-in min)
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

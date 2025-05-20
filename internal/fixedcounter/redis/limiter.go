@@ -35,7 +35,7 @@ func NewLimiter(client *redis.Client, key string, window time.Duration, limit in
 func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	redisKey := l.key + ":" + identifier
 
-	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+	nowMillis := time.Now().UnixMilli()
 	windowMillis := l.window.Milliseconds()
 	expirySeconds := int64(l.window.Seconds())
 

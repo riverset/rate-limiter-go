@@ -8,6 +8,7 @@ type AlgorithmType string
 const (
 	FixedWindowCounter   AlgorithmType = "fixed_window_counter"
 	SlidingWindowCounter AlgorithmType = "sliding_window_counter"
+	TokenBucket          AlgorithmType = "token_bucket"
 )
 
 // BackendType represents the storage backend.
@@ -25,7 +26,8 @@ type LimiterConfig struct {
 	Backend   BackendType   `yaml:"backend"`
 	Key       string        `yaml:"key"`
 
-	WindowParams *WindowConfig `yaml:"window_params,omitempty"`
+	WindowParams      *WindowConfig      `yaml:"window_params,omitempty"`
+	TokenBucketParams *TokenBucketConfig `yaml:"token_bucket_params,omitempty"`
 
 	RedisParams    *RedisBackendConfig    `yaml:"redis_params,omitempty"`
 	MemcacheParams *MemcacheBackendConfig `yaml:"memcache_params,omitempty"`
@@ -35,6 +37,12 @@ type LimiterConfig struct {
 type WindowConfig struct {
 	Window time.Duration `yaml:"window"`
 	Limit  int64         `yaml:"limit"`
+}
+
+// TokenBucketConfig holds parameters for the Token Bucket algorithm.
+type TokenBucketConfig struct {
+	Rate     int `yaml:"rate"`
+	Capacity int `yaml:"capacity"`
 }
 
 // RedisBackendConfig holds parameters for the Redis backend.

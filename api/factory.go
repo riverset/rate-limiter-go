@@ -17,6 +17,8 @@ func NewLimiterFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
 		return factory.NewFixedWindowFactory()
 	case config.SlidingWindowCounter:
 		return factory.NewSlidingWindowCounterFactory()
+	case config.TokenBucket:
+		return factory.NewTokenBucketFactory()
 	default:
 		err := fmt.Errorf("unsupported algorithm type '%s' for key '%s'", cfg.Algorithm, cfg.Key)
 		log.Printf("Failed to get factory: %v", err)

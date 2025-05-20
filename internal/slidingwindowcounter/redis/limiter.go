@@ -33,7 +33,7 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	itemKey := l.key + ":" + identifier
 
 	// Get current time in milliseconds
-	now := time.Now().UnixNano() / int64(time.Millisecond)
+	now := time.Now().UnixMilli()
 
 	// Window size in milliseconds
 	windowSizeMillis := l.windowSize.Milliseconds()
