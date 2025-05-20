@@ -31,7 +31,7 @@ func main() {
 		log.Fatalf("Rate limiter with key 'api_rate_limit' not found in config")
 	}
 
-	userLoginRateLimiter, ok := limiters["user_login_rate_limit"] // Access from the returned map
+	userLoginRateLimiter, ok := limiters["user_login_rate_limit_distributed"] // Access from the returned map
 	if !ok {
 		log.Fatalf("Rate limiter with key 'user_login_rate_limit' not found in config")
 	}
