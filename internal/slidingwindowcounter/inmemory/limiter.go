@@ -77,12 +77,14 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 		timeSinceWindowStart = time.Since(currentCounter.currentWindowStart) // Recalculate after truncating
 	}
 
+	// Calculate the weighted total requests, considering the elapsed time
 	weightCurrentWindow := timeSinceWindowStart.Seconds() / l.windowSize.Seconds()
 	weightPreviousWindow := 1 - weightCurrentWindow
-	totalRequests := weightCurrentWindow*(float64(currentCounter.currentWindowCount)) + weightPreviousWindow*(float64(currentCounter.previousWindowCount))
+	totalRequests := weightCurrentWindow*float64(currentCounter.currentWindowCount) + weightPreviousWindow*float64(currentCounter.previousWindowCount)
 
+	// Check if the total requests exceed the limit
 	if totalRequests < float64(l.limit) {
-		currentCounter.currentWindowCount += 1
+		currentCounter.currentWindowCount++
 		return true, nil
 	}
 

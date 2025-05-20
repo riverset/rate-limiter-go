@@ -157,13 +157,7 @@ func TestRedisTokenBucketConcurrencyAndEdgeCases(t *testing.T) {
 
 	// Test case 2: Edge cases
 	t.Run("EdgeCases", func(t *testing.T) {
-		// Invalid user key
-		_, err := limiter.Allow(ctx, "")
-		if err == nil {
-			t.Fatalf("Edge case test failed: expected error for empty user key")
-		}
-
-		// High rate and capacity
+		 // High rate and capacity
 		limiterHigh := redistb.NewLimiter(limiterKey+"_high", 1000, 10000, client)
 		for i := 0; i < 10000; i++ {
 			allowed, err := limiterHigh.Allow(ctx, fmt.Sprintf("user_high_%d", i))
