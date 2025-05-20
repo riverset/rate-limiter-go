@@ -10,15 +10,18 @@ import (
 
 // RateLimitMiddleware provides rate limiting functionality.
 type RateLimitMiddleware struct {
-	limiter types.Limiter
-	metrics *metrics.RateLimitMetrics
+	limiter    types.Limiter
+	metrics    *metrics.RateLimitMetrics
+	limiterKey string
 }
 
 // NewRateLimitMiddleware creates a new RateLimitMiddleware.
-func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics) *RateLimitMiddleware {
+// Added limiterKey parameter for logging.
+func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics, limiterKey string) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
-		limiter: limiter,
-		metrics: metrics,
+		limiter:    limiter,
+		metrics:    metrics,
+		limiterKey: limiterKey,
 	}
 }
 
@@ -28,9 +31,10 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 	return func(w http.ResponseWriter, r *http.Request) {
 		identifier := identifierFunc(r)
 		if identifier == "" {
-			log.Printf("Warning: Could not extract identifier for request from %s", r.RemoteAddr)
+			// Log with RemoteAddr if identifier extraction fails
+			log.Printf("Limiter '%s': Warning: Could not extract identifier for request from %s", m.limiterKey, r.RemoteAddr)
 			w.WriteHeader(http.StatusInternalServerError)
-			log.Printf("Request denied due to missing identifier for %s", r.RemoteAddr)
+			log.Printf("Limiter '%s': Request from %s denied due to missing identifier", m.limiterKey, r.RemoteAddr)
 			m.metrics.RecordRequest(false)
 			return
 		}
@@ -38,9 +42,11 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 		// Pass the request's context to the Allow method
 		allowed, err := m.limiter.Allow(r.Context(), identifier)
 		if err != nil {
-			log.Printf("Error checking rate limit for %s: %v", identifier, err)
+			// Include limiter key and identifier in error log
+			log.Printf("Limiter '%s': Error checking rate limit for identifier '%s': %v", m.limiterKey, identifier, err)
 			w.WriteHeader(http.StatusInternalServerError)
-			log.Printf("Request denied due to limiter error for %s", identifier)
+			// Include limiter key and identifier in denial log
+			log.Printf("Limiter '%s': Request for identifier '%s' denied due to limiter error", m.limiterKey, identifier)
 			m.metrics.RecordRequest(false)
 			return
 		}
@@ -51,7 +57,8 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 			next.ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
-			log.Printf("Request rate limited for %s accessing %s", identifier, r.URL.Path)
+			// Include limiter key, identifier, and path in denial log
+			log.Printf("Limiter '%s': Request for identifier '%s' rate limited accessing %s", m.limiterKey, identifier, r.URL.Path)
 		}
 	}
 }

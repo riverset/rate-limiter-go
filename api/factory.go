@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	"log" // Added log import
+	"log"
 
 	"learn.ratelimiter/config"
 	"learn.ratelimiter/internal/factory"
@@ -10,8 +10,9 @@ import (
 )
 
 // NewLimiterFactory returns a concrete LimiterFactory based on the algorithm.
+// Added cfg.Key to the initial log message.
 func NewLimiterFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
-	log.Printf("Getting factory for algorithm '%s'", cfg.Algorithm)
+	log.Printf("Factory: Attempting to get factory for algorithm '%s' for limiter key '%s'", cfg.Algorithm, cfg.Key)
 	switch cfg.Algorithm {
 	case config.FixedWindowCounter:
 		return factory.NewFixedWindowFactory()
@@ -21,7 +22,8 @@ func NewLimiterFactory(cfg config.LimiterConfig) (LimiterFactory, error) {
 		return factory.NewTokenBucketFactory()
 	default:
 		err := fmt.Errorf("unsupported algorithm type '%s' for key '%s'", cfg.Algorithm, cfg.Key)
-		log.Printf("Failed to get factory: %v", err)
+		// Added cfg.Key to the error log message.
+		log.Printf("Factory: Failed to get factory for limiter key '%s': %v", cfg.Key, err)
 		return nil, err
 	}
 }

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"flag" // Import the flag package
-	"fmt"  // Import io for the Closer interface
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -18,37 +18,45 @@ import (
 func main() {
 	// Define a flag for the port, defaulting to 8080
 	port := flag.Int("p", 8080, "Port to run the HTTP server on")
+	// Define a flag for the config file path
+	configPath := flag.String("config", "config.yaml", "Path to the configuration file") // Added config flag
 
 	// Parse the command-line flags
 	flag.Parse()
 
 	// Use the new function to initialize multiple limiters and get the closer
-	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath("config.yaml") // Updated variables
+	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath(*configPath) // Use the configPath flag value
 	if err != nil {
-		log.Fatalf("Error initializing rate limiters from config: %v", err)
+		// Improved fatal error log
+		log.Fatalf("Application startup failed: Error initializing rate limiters from config '%s': %v", *configPath, err)
 	}
 	// Defer the Close method on the returned closer
 	defer closer.Close()
 
-	log.Println("Rate limiters successfully initialized from config.")
+	log.Println("Application: All rate limiters successfully initialized.")
 
 	// Retrieve specific limiters from the map
-	apiRateLimiter, ok := limiters["api_rate_limit"] // Access from the returned map
+	apiRateLimiterKey := "api_rate_limit"
+	apiRateLimiter, ok := limiters[apiRateLimiterKey] // Access from the returned map
 	if !ok {
-		log.Fatalf("Rate limiter with key 'api_rate_limit' not found in config")
+		// Improved fatal error log
+		log.Fatalf("Application startup failed: Rate limiter with key '%s' not found in config", apiRateLimiterKey)
 	}
 
-	userLoginRateLimiter, ok := limiters["user_login_rate_limit_distributed"] // Access from the returned map
+	userLoginRateLimiterKey := "user_login_rate_limit_distributed"
+	userLoginRateLimiter, ok := limiters[userLoginRateLimiterKey] // Access from the returned map
 	if !ok {
-		log.Fatalf("Rate limiter with key 'user_login_rate_limit_distributed' not found in config") // Updated error message
+		// Improved fatal error log
+		log.Fatalf("Application startup failed: Rate limiter with key '%s' not found in config", userLoginRateLimiterKey)
 	}
 
 	// You can now use different limiters for different routes or logic
 	apiMetrics := metrics.NewRateLimitMetrics()
 	userLoginMetrics := metrics.NewRateLimitMetrics() // Example: separate metrics per limiter
 
-	apiRateLimitMiddleware := middleware.NewRateLimitMiddleware(apiRateLimiter, apiMetrics)
-	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics) // Example: separate middleware per limiter
+	// Pass the limiter key to the middleware constructor
+	apiRateLimitMiddleware := middleware.NewRateLimitMiddleware(apiRateLimiter, apiMetrics, apiRateLimiterKey)
+	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics, userLoginRateLimiterKey) // Pass the limiter key
 
 	http.HandleFunc("/unlimited", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -82,8 +90,8 @@ func main() {
 
 	// Construct the address string using the parsed port
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Starting server on %s...", addr) // Use Printf for formatting
-	log.Fatal(http.ListenAndServe(addr, nil))    // Use the constructed address
+	log.Printf("Application: Starting HTTP server on %s...", addr) // Use Printf for formatting
+	log.Fatal(http.ListenAndServe(addr, nil))                      // Use the constructed address
 }
 
 func getClientIP(r *http.Request) string {

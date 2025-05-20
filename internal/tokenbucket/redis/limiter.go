@@ -47,8 +47,8 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	).Result()
 
 	if err != nil {
-		log.Printf("Redis script execution failed for key '%s': %v", redisKey, err)
-		return false, fmt.Errorf("redis script error: %w", err)
+		log.Printf("Redis script execution failed for limiter '%s', identifier '%s' (Redis key: %s): %v", l.key, identifier, redisKey, err)
+		return false, fmt.Errorf("redis script error for limiter '%s', identifier '%s': %w", l.key, identifier, err)
 	}
 
 	// The script returns a two-element array: [allowed, tokens]
@@ -56,18 +56,15 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	// tokens is the number of tokens remaining after the request
 	results, ok := result.([]interface{})
 	if !ok || len(results) != 2 {
-		return false, fmt.Errorf("unexpected result from redis script for key '%s'", redisKey)
+		log.Printf("Unexpected result from redis script for limiter '%s', identifier '%s' (Redis key: %s)", l.key, identifier, redisKey)
+		return false, fmt.Errorf("unexpected result from redis script for limiter '%s', identifier '%s'", l.key, identifier)
 	}
 
 	allowed, ok := results[0].(int64)
 	if !ok {
-		return false, fmt.Errorf("unexpected allowed value type from redis script for key '%s'", redisKey)
+		log.Printf("Unexpected allowed value type from redis script for limiter '%s', identifier '%s' (Redis key: %s)", l.key, identifier, redisKey)
+		return false, fmt.Errorf("unexpected allowed value type from redis script for limiter '%s', identifier '%s'", l.key, identifier)
 	}
-
-	// tokensRemaining, ok := results[1].(int64) // We don't need tokensRemaining for the Allow method return
-	// if !ok {
-	// 	return false, fmt.Errorf("unexpected tokens remaining value type from redis script for key '%s'", redisKey)
-	// }
 
 	return allowed == 1, nil
 }

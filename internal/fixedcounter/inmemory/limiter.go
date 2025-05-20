@@ -3,7 +3,7 @@ package fcinmemory
 import (
 	"context"
 	"fmt"
-	"log" // Added log import
+	"log"
 	"sync"
 	"time"
 )
@@ -17,7 +17,7 @@ type CounterState struct {
 
 // Limiter implements the Fixed Window Counter algorithm using in-memory storage.
 type Limiter struct {
-	key    string
+	key    string // Limiter key from config
 	window time.Duration
 	limit  int64
 
@@ -26,7 +26,7 @@ type Limiter struct {
 
 // NewLimiter creates a new in-memory Fixed Window Counter limiter.
 func NewLimiter(key string, window time.Duration, limit int64) *Limiter {
-	log.Printf("Initialized in-memory Fixed Window Counter limiter for key '%s' with window %s and limit %d", key, window, limit)
+	log.Printf("FixedWindowCounter(InMemory): Initialized limiter '%s' with window %s and limit %d", key, window, limit)
 	return &Limiter{
 		key:      key,
 		window:   window,
@@ -43,7 +43,8 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	state, ok := stateIface.(*CounterState)
 	if !ok {
 		err := fmt.Errorf("unexpected state type for identifier %s in in-memory limiter '%s'", identifier, l.key)
-		log.Printf("Error in Allow for key '%s', identifier '%s': %v", l.key, identifier, err)
+		// Added limiter key and identifier to error log
+		log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Error in Allow for identifier '%s': %v", l.key, identifier, err)
 		return false, err
 	}
 
@@ -52,15 +53,30 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 
 	now := time.Now()
 
+	// Check if context is cancelled before proceeding
+	select {
+	case <-ctx.Done():
+		// Added limiter key and identifier to log
+		log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Context cancelled for identifier '%s' during check: %v", l.key, identifier, ctx.Err())
+		return false, ctx.Err()
+	default:
+		// Continue
+	}
+
 	if now.After(state.WindowEnd) {
+		// log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Identifier '%s': Window reset. Old end: %s, New end: %s", l.key, identifier, state.WindowEnd, now.Add(l.window)) // Optional: verbose log
 		state.Count = 0
 		state.WindowEnd = now.Add(l.window)
 	}
 
+	// log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Identifier '%s': Current count %d, Limit %d", l.key, identifier, state.Count, l.limit) // Optional: verbose log
+
 	if state.Count < l.limit {
 		state.Count++
+		// log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Identifier '%s' allowed. New count: %d", l.key, identifier, state.Count) // Optional: verbose log
 		return true, nil
 	}
 
+	// log.Printf("FixedWindowCounter(InMemory): Limiter '%s': Identifier '%s' denied. Count %d >= Limit %d", l.key, identifier, state.Count, l.limit) // Optional: verbose log
 	return false, nil
 }

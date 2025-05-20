@@ -19,31 +19,33 @@ func NewTokenBucketFactory() (*TokenBucketFactory, error) {
 func (*TokenBucketFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
 	if cfg.TokenBucketParams == nil {
 		err := fmt.Errorf("token bucket parameters are missing in config for key '%s'", cfg.Key)
-		log.Printf("Creation failed: %v", err)
+		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
 		return nil, err
 	}
 
 	switch cfg.Backend {
 	case config.InMemory:
-		log.Printf("Creating in-memory Token Bucket limiter for key '%s'", cfg.Key)
+		// Added parameters to log
+		log.Printf("Factory(TokenBucket): Creating in-memory limiter for key '%s' with rate %d, capacity %d", cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity)
 		// Assuming the inmemory package has a New function matching the signature
-		return tbinmemory.NewLimiter(cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity), nil
+		return tbinmemory.NewLimiter(cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity), nil // Pass key to in-memory limiter
 	case config.Redis:
-		log.Printf("Creating Redis Token Bucket limiter for key '%s'", cfg.Key)
+		// Added parameters to log
+		log.Printf("Factory(TokenBucket): Creating Redis limiter for key '%s' with rate %d, capacity %d", cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity)
 		if clients.RedisClient == nil {
 			err := fmt.Errorf("redis client is required but not provided for redis backend for key '%s'", cfg.Key)
-			log.Printf("Creation failed: %v", err)
+			log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
 			return nil, err
 		}
 		return redistb.NewLimiter(cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity, clients.RedisClient), nil
 
 	case config.Memcache:
 		err := fmt.Errorf("memcache backend not yet implemented for token bucket for key '%s'", cfg.Key)
-		log.Printf("Creation failed: %v", err)
+		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
 		return nil, err
 	default:
 		err := fmt.Errorf("unsupported backend type '%s' for token bucket for key '%s'", cfg.Backend, cfg.Key)
-		log.Printf("Creation failed: %v", err)
+		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
 		return nil, err
 	}
 }
