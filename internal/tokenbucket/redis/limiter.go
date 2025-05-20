@@ -1,3 +1,4 @@
+// Package tbredis provides a Redis implementation of the Token Bucket rate limiting algorithm.
 package tbredis
 
 import (
@@ -11,6 +12,8 @@ import (
 	"learn.ratelimiter/types"
 )
 
+// Limiter is the Redis implementation of the Token Bucket.
+// It uses Redis hashes to store the bucket state and Lua scripts for atomic operations.
 type Limiter struct {
 	key      string
 	rate     int // tokens per second
@@ -19,6 +22,8 @@ type Limiter struct {
 	script   *redis.Script
 }
 
+// NewLimiter creates a new Redis-based Token Bucket limiter.
+// It takes a unique key for the limiter, the rate at which tokens are added, the maximum capacity of the bucket, and a Redis client instance.
 func NewLimiter(key string, rate int, capacity int, client *redis.Client) types.Limiter {
 	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "Redis").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
 
@@ -31,6 +36,9 @@ func NewLimiter(key string, rate int, capacity int, client *redis.Client) types.
 	}
 }
 
+// Allow checks if a request for the given identifier is allowed based on the Token Bucket algorithm using Redis.
+// It executes a Lua script on Redis to atomically check and update the bucket.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	// The actual key in Redis will be a combination of the limiter key and the identifier
 	redisKey := fmt.Sprintf("%s:%s", l.key, identifier)

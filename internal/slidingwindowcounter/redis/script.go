@@ -1,7 +1,10 @@
+// Package swredis provides a Redis implementation of the Sliding Window Counter rate limiting algorithm.
 package swredis
 
 import "github.com/go-redis/redis/v8"
 
+// redisAllowScript is the Lua script used by the Redis Sliding Window Counter to atomically check and update the counter.
+// It takes the key, current time, window size, and limit as arguments.
 var redisAllowScript = redis.NewScript(`
 local key = KEYS[1] -- Identifier for the rate limit (e.g., user ID, IP address)
 local now = tonumber(ARGV[1]) -- Current time in milliseconds

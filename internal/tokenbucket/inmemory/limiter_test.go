@@ -1,3 +1,4 @@
+// Package tbinmemory_test contains unit tests for the in-memory Token Bucket rate limiter.
 package tbinmemory_test
 
 import (
@@ -8,6 +9,7 @@ import (
 	tbinmemory "learn.ratelimiter/internal/tokenbucket/inmemory"
 )
 
+// TestNewLimiter tests the initialization of a new in-memory Token Bucket limiter.
 func TestNewLimiter(t *testing.T) {
 	key := "test-key"
 	rate := 10
@@ -26,6 +28,7 @@ func TestNewLimiter(t *testing.T) {
 	// }
 }
 
+// TestAllowBasic tests the basic allowance and denial of requests for a single identifier.
 func TestAllowBasic(t *testing.T) {
 	key := "test-key-basic"
 	rate := 1     // 1 token per second
@@ -62,6 +65,7 @@ func TestAllowBasic(t *testing.T) {
 	}
 }
 
+// TestAllowRefill tests the token refill mechanism of the in-memory Token Bucket limiter.
 func TestAllowRefill(t *testing.T) {
 	key := "test-key-refill"
 	rate := 1     // 1 token per second
@@ -112,6 +116,7 @@ func TestAllowRefill(t *testing.T) {
 	}
 }
 
+// TestAllowMultipleIdentifiers tests that the limiter handles multiple identifiers independently.
 func TestAllowMultipleIdentifiers(t *testing.T) {
 	key := "test-key-multi"
 	rate := 1     // 1 token per second
@@ -157,6 +162,7 @@ func TestAllowMultipleIdentifiers(t *testing.T) {
 	}
 }
 
+// TestAllowContextCancellation tests that the Allow method respects context cancellation.
 func TestAllowContextCancellation(t *testing.T) {
 	key := "test-key-cancel"
 	rate := 100 // High rate so it doesn't block on tokens

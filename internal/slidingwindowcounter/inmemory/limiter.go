@@ -1,3 +1,4 @@
+// Package swinmemory provides an in-memory implementation of the Sliding Window Counter rate limiting algorithm.
 package swinmemory
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/rs/zerolog/log" // Import zerolog's global logger
 )
 
+// limiter is the in-memory implementation of the Sliding Window Counter.
+// It stores the counts for each identifier in a sync.Map.
 type limiter struct {
 	key        string // Limiter key from config
 	counter    sync.Map
@@ -23,7 +26,8 @@ type slidingWindowCounter struct {
 	mu                  sync.Mutex
 }
 
-// Added key parameter to NewLimiter
+// NewLimiter creates a new in-memory Sliding Window Counter limiter.
+// It takes a unique key for the limiter, the size of the sliding window, and the maximum limit of requests within the window.
 func NewLimiter(key string, windowSize time.Duration, limit int64) *limiter {
 	log.Info().Str("limiter_type", "SlidingWindowCounter").Str("backend", "InMemory").Str("limiter_key", key).Dur("window", windowSize).Int64("limit", limit).Msg("Limiter: Initialized")
 	return &limiter{
@@ -34,6 +38,8 @@ func NewLimiter(key string, windowSize time.Duration, limit int64) *limiter {
 	}
 }
 
+// Allow checks if a request is allowed for the given identifier based on the Sliding Window Counter algorithm.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 
 	tempCounter, _ := l.counter.LoadOrStore(identifier, l.initializeWindowCounter(0))

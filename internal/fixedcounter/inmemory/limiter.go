@@ -1,3 +1,4 @@
+// Package fcinmemory provides an in-memory implementation of the Fixed Window Counter rate limiting algorithm.
 package fcinmemory
 
 import (
@@ -17,6 +18,7 @@ type CounterState struct {
 }
 
 // Limiter implements the Fixed Window Counter algorithm using in-memory storage.
+// It stores the counts for each identifier in a sync.Map.
 type Limiter struct {
 	key    string // Limiter key from config
 	window time.Duration
@@ -26,6 +28,7 @@ type Limiter struct {
 }
 
 // NewLimiter creates a new in-memory Fixed Window Counter limiter.
+// It takes a unique key for the limiter, the size of the window, and the maximum limit of requests within the window.
 func NewLimiter(key string, window time.Duration, limit int64) *Limiter {
 	log.Info().Str("limiter_type", "FixedWindowCounter").Str("backend", "InMemory").Str("limiter_key", key).Dur("window", window).Int64("limit", limit).Msg("Limiter: Initialized")
 	return &Limiter{
@@ -36,8 +39,8 @@ func NewLimiter(key string, window time.Duration, limit int64) *Limiter {
 	}
 }
 
-// Allow checks if a request for the given identifier is allowed.
-// It now accepts a context.Context parameter.
+// Allow checks if a request for the given identifier is allowed based on the Fixed Window Counter algorithm.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	stateIface, _ := l.counters.LoadOrStore(identifier, &CounterState{})
 

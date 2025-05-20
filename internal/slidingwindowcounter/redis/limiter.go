@@ -1,3 +1,4 @@
+// Package swredis provides a Redis implementation of the Sliding Window Counter rate limiting algorithm.
 package swredis
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/rs/zerolog/log" // Import zerolog's global logger
 )
 
+// limiter is the Redis implementation of the Sliding Window Counter.
+// It uses Redis sorted sets to store timestamps of requests.
 type limiter struct {
 	key        string // Limiter key from config
 	client     *redis.Client
@@ -17,7 +20,8 @@ type limiter struct {
 	script     *redis.Script
 }
 
-// Added key parameter to NewLimiter
+// NewLimiter creates a new Redis-based Sliding Window Counter limiter.
+// It takes a unique key for the limiter, the size of the sliding window, the maximum limit of requests within the window, and a Redis client instance.
 func NewLimiter(key string, windowSize time.Duration, limit int64, client *redis.Client) *limiter {
 	log.Info().Str("limiter_type", "SlidingWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", windowSize).Int64("limit", limit).Msg("Limiter: Initialized")
 	return &limiter{
@@ -29,6 +33,9 @@ func NewLimiter(key string, windowSize time.Duration, limit int64, client *redis
 	}
 }
 
+// Allow checks if a request is allowed for the given identifier based on the Sliding Window Counter algorithm using Redis.
+// It executes a Lua script on Redis to atomically check and update the counter.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	// Construct the specific key for this identifier
 	redisKey := l.key + ":" + identifier

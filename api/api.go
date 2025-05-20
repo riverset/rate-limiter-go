@@ -1,3 +1,4 @@
+// Package api provides the main interface for initializing and using the rate limiters.
 package api
 
 import (
@@ -19,6 +20,7 @@ type clientCloser struct {
 }
 
 // Close gracefully shuts down all initialized backend clients held by the clientCloser.
+// It returns an error if any client fails to close.
 func (c *clientCloser) Close() error {
 	log.Info().Msg("API: Starting backend client shutdown...")
 	var errs []error
@@ -53,8 +55,9 @@ func (c *clientCloser) Close() error {
 	return nil
 }
 
-// NewLimitersFromConfigPath loads config, initializes any needed backend clients,
-// and returns a map of rate limiters and an io.Closer for backend clients.
+// NewLimitersFromConfigPath loads configuration from the given path, initializes any needed backend clients,
+// and returns a map of rate limiters keyed by their configuration key, and an io.Closer for backend clients.
+// It returns an error if configuration loading or client/limiter initialization fails.
 func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.Closer, error) {
 	log.Info().Str("config_path", configPath).Msg("API: Starting initialization of rate limiters from config path")
 	cfgFile, err := apiinternal.LoadConfig(configPath)

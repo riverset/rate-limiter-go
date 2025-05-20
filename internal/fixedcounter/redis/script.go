@@ -1,3 +1,4 @@
+// Package fcredis provides a Redis implementation of the Fixed Window Counter rate limiting algorithm.
 package fcredis
 
 import "github.com/go-redis/redis/v8"

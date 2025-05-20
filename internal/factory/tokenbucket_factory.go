@@ -1,3 +1,4 @@
+// Package factory provides factories for creating different rate limiter instances.
 package factory
 
 import (
@@ -11,12 +12,16 @@ import (
 	"learn.ratelimiter/types"
 )
 
+// TokenBucketFactory creates limiters using the Token Bucket algorithm.
 type TokenBucketFactory struct{}
 
+// NewTokenBucketFactory returns a new TokenBucketFactory instance.
 func NewTokenBucketFactory() (*TokenBucketFactory, error) {
 	return &TokenBucketFactory{}, nil
 }
 
+// CreateLimiter creates a Token Bucket limiter based on the configuration and backend clients.
+// It takes a LimiterConfig and BackendClients and returns a types.Limiter or an error.
 func (*TokenBucketFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
 	log.Info().Str("factory", "TokenBucket").Str("limiter_key", cfg.Key).Str("backend", string(cfg.Backend)).Msg("Factory: Creating limiter")
 	if cfg.TokenBucketParams == nil {

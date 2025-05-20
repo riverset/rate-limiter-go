@@ -1,3 +1,4 @@
+// Package internal contains internal helper functions for the API.
 package internal
 
 import (
@@ -14,12 +15,14 @@ import (
 )
 
 // ConfigFile represents the top-level structure of the configuration file.
+// It contains a list of rate limiter configurations.
 type ConfigFile struct {
+	// Limiters is a list of individual rate limiter configurations.
 	Limiters []config.LimiterConfig `yaml:"limiters"`
 }
 
-// LoadConfig reads and unmarshals the YAML config.
-// It now expects a list of limiters under the 'limiters' key.
+// LoadConfig reads and unmarshals the YAML configuration file from the given path.
+// It returns a ConfigFile struct or an error if loading or unmarshalling fails.
 func LoadConfig(path string) (*ConfigFile, error) {
 	log.Info().Str("config_path", path).Msg("Helpers: Attempting to load configuration")
 	data, err := os.ReadFile(path)
@@ -38,7 +41,8 @@ func LoadConfig(path string) (*ConfigFile, error) {
 	return &cfg, nil
 }
 
-// InitRedisClient initializes and pings a Redis client based on config.
+// InitRedisClient initializes and pings a Redis client based on the provided limiter configuration.
+// It takes a LimiterConfig (specifically the RedisParams) and returns a Redis client instance or an error.
 func InitRedisClient(cfg *config.LimiterConfig) (*redis.Client, error) {
 	log.Info().Str("address", cfg.RedisParams.Address).Int("db", cfg.RedisParams.DB).Msg("Helpers: Attempting to initialize Redis client")
 	if cfg.RedisParams == nil {

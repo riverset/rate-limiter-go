@@ -1,3 +1,4 @@
+// Package factory provides factories for creating different rate limiter instances.
 package factory
 
 import (
@@ -19,8 +20,8 @@ func NewFixedWindowFactory() (*FixedWindowFactory, error) {
 	return &FixedWindowFactory{}, nil
 }
 
-// CreateLimiter creates a Fixed Window Counter limiter based on the configuration and clients.
-// It now returns types.Limiter and accepts types.BackendClients.
+// CreateLimiter creates a Fixed Window Counter limiter based on the configuration and backend clients.
+// It takes a LimiterConfig and BackendClients and returns a types.Limiter or an error.
 func (f *FixedWindowFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
 	log.Info().Str("factory", "FixedWindowCounter").Str("limiter_key", cfg.Key).Str("backend", string(cfg.Backend)).Msg("Factory: Creating limiter")
 	if cfg.WindowParams == nil {

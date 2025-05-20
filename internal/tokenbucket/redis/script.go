@@ -1,7 +1,10 @@
+// Package tbredis provides a Redis implementation of the Token Bucket rate limiting algorithm.
 package tbredis
 
 import "github.com/go-redis/redis/v8"
 
+// redisAllowScript is the Lua script used by the Redis Token Bucket to atomically check and update the bucket state.
+// It takes the bucket key, capacity, rate, current timestamp, and requested tokens as arguments.
 var redisAllowScript = redis.NewScript(`
 		-- Lua script for Token Bucket algorithm
 		-- KEYS[1]: bucket key

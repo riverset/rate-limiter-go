@@ -1,3 +1,4 @@
+// Package middleware provides HTTP middleware for integrating the rate limiter.
 package middleware
 
 import (
@@ -9,15 +10,18 @@ import (
 	"learn.ratelimiter/types"
 )
 
-// RateLimitMiddleware provides rate limiting functionality.
+// RateLimitMiddleware provides rate limiting functionality for HTTP handlers.
 type RateLimitMiddleware struct {
-	limiter    types.Limiter
-	metrics    *metrics.RateLimitMetrics
+	// limiter is the rate limiter instance to use.
+	limiter types.Limiter
+	// metrics is the metrics collector for rate limiting statistics.
+	metrics *metrics.RateLimitMetrics
+	// limiterKey is the key associated with this limiter configuration.
 	limiterKey string
 }
 
 // NewRateLimitMiddleware creates a new RateLimitMiddleware.
-// Added limiterKey parameter for logging.
+// It takes a types.Limiter, a metrics.RateLimitMetrics collector, and a unique key for the limiter.
 func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMetrics, limiterKey string) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
 		limiter:    limiter,
@@ -27,7 +31,8 @@ func NewRateLimitMiddleware(limiter types.Limiter, metrics *metrics.RateLimitMet
 }
 
 // Handle wraps an http.HandlerFunc with rate limiting logic.
-// identifierFunc is a function that extracts the identifier (e.g., IP address) from the request.
+// It takes the next http.HandlerFunc in the chain and a function to extract the identifier from the request.
+// It returns a new http.HandlerFunc that applies rate limiting before calling the next handler.
 func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(*http.Request) string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		identifier := identifierFunc(r)

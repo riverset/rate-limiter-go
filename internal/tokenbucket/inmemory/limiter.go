@@ -1,3 +1,4 @@
+// Package tbinmemory provides an in-memory implementation of the Token Bucket rate limiting algorithm.
 package tbinmemory
 
 import (
@@ -9,6 +10,8 @@ import (
 	"github.com/rs/zerolog/log" // Import zerolog's global logger
 )
 
+// limiter is the in-memory implementation of the Token Bucket.
+// It stores token buckets for each identifier in a map.
 type limiter struct {
 	key      string // Limiter key from config
 	buckets  map[string]*tokenBucket
@@ -23,7 +26,8 @@ type tokenBucket struct {
 	lastRefill time.Time
 }
 
-// Added key parameter to NewLimiter
+// NewLimiter creates a new in-memory Token Bucket limiter.
+// It takes a unique key for the limiter, the rate at which tokens are added, and the maximum capacity of the bucket.
 func NewLimiter(key string, rate, capacity int) *limiter {
 	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "InMemory").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
 	return &limiter{
@@ -34,8 +38,8 @@ func NewLimiter(key string, rate, capacity int) *limiter {
 	}
 }
 
-// Allow checks if a request for the given identifier is allowed.
-// Updated to match core.Limiter interface.
+// Allow checks if a request for the given identifier is allowed based on the Token Bucket algorithm.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

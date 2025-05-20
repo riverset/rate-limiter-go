@@ -1,3 +1,4 @@
+// Package fcredis provides a Redis implementation of the Fixed Window Counter rate limiting algorithm.
 package fcredis
 
 import (
@@ -10,6 +11,7 @@ import (
 )
 
 // Limiter implements the Fixed Window Counter algorithm using Redis.
+// It uses Redis keys to store the count for each window and Lua scripts for atomic operations.
 type Limiter struct {
 	client *redis.Client
 	key    string // Limiter key from config
@@ -18,7 +20,8 @@ type Limiter struct {
 	script *redis.Script
 }
 
-// Added key parameter to NewLimiter
+// NewLimiter creates a new Redis-based Fixed Window Counter limiter.
+// It takes a Redis client instance, a unique key for the limiter, the size of the window, and the maximum limit of requests within the window.
 func NewLimiter(client *redis.Client, key string, window time.Duration, limit int64) *Limiter {
 	log.Info().Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", window).Int64("limit", limit).Msg("Limiter: Initialized")
 	return &Limiter{
@@ -31,7 +34,7 @@ func NewLimiter(client *redis.Client, key string, window time.Duration, limit in
 }
 
 // Allow checks if a request for the given identifier is allowed using a Redis Lua script.
-// It now accepts a context.Context parameter and passes it to the Redis client.
+// It takes a context and an identifier and returns true if the request is allowed, false otherwise, and an error if any occurred.
 func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	redisKey := l.key + ":" + identifier
 

@@ -1,3 +1,4 @@
+// Package main is the entry point for the rate limiter application.
 package main
 
 import (
@@ -19,6 +20,9 @@ import (
 	// Import types to use types.Limiter
 )
 
+// main is the entry point of the application.
+// It parses flags, loads configuration, initializes rate limiters, sets up HTTP routes with middleware,
+// and starts the HTTP server.
 func main() {
 	// Configure zerolog for console output
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
@@ -111,6 +115,8 @@ func main() {
 	log.Fatal().Err(http.ListenAndServe(addr, nil)).Str("address", addr).Msg("HTTP server stopped")
 }
 
+// getClientIP extracts the client's IP address from the request.
+// It checks X-Forwarded-For, X-Real-IP headers, and finally the request's RemoteAddr.
 func getClientIP(r *http.Request) string {
 	ip := r.Header.Get("X-Forwarded-For")
 	if ip != "" {

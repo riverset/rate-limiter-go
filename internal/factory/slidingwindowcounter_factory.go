@@ -1,3 +1,4 @@
+// Package factory provides factories for creating different rate limiter instances.
 package factory
 
 import (
@@ -11,11 +12,16 @@ import (
 	"learn.ratelimiter/types"
 )
 
+// SlidingWindowCounterFactory creates limiters using the Sliding Window Counter algorithm.
 type SlidingWindowCounterFactory struct{}
 
+// NewSlidingWindowCounterFactory returns a new SlidingWindowCounterFactory instance.
 func NewSlidingWindowCounterFactory() (*SlidingWindowCounterFactory, error) {
 	return &SlidingWindowCounterFactory{}, nil
 }
+
+// CreateLimiter creates a Sliding Window Counter limiter based on the configuration and backend clients.
+// It takes a LimiterConfig and BackendClients and returns a types.Limiter or an error.
 func (*SlidingWindowCounterFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
 	log.Info().Str("factory", "SlidingWindowCounter").Str("limiter_key", cfg.Key).Str("backend", string(cfg.Backend)).Msg("Factory: Creating limiter")
 	if cfg.WindowParams == nil {
