@@ -5,7 +5,8 @@ import (
 	"log"
 
 	"learn.ratelimiter/config"
-	"learn.ratelimiter/internal/fixedcounter/inmemory"
+	swinmemory "learn.ratelimiter/internal/slidingwindowcounter/inmemory"
+	swredis "learn.ratelimiter/internal/slidingwindowcounter/redis"
 	"learn.ratelimiter/types"
 )
 
@@ -24,11 +25,15 @@ func (*SlidingWindowCounterFactory) CreateLimiter(cfg config.LimiterConfig, clie
 	switch cfg.Backend {
 	case config.InMemory:
 		log.Printf("Creating in-memory Sliding Window Counter limiter for key '%s'", cfg.Key)
-		return inmemory.NewLimiter(cfg.Key, cfg.WindowParams.Window, cfg.WindowParams.Limit), nil
+		return swinmemory.NewLimiter(cfg.Key, cfg.WindowParams.Window, cfg.WindowParams.Limit), nil
 	case config.Redis:
-		err := fmt.Errorf("redis backend not yet implemented for sliding window counter for key '%s'", cfg.Key)
-		log.Printf("Creation failed: %v", err)
-		return nil, err
+		log.Printf("Creating Redis Sliding Window Counter limiter for key '%s'", cfg.Key)
+		if clients.RedisClient == nil {
+			err := fmt.Errorf("redis client is required but not provided for redis backend for key '%s'", cfg.Key)
+			log.Printf("Creation failed: %v", err)
+			return nil, err
+		}
+		return swredis.NewLimiter(cfg.Key, cfg.WindowParams.Window, cfg.WindowParams.Limit, clients.RedisClient), nil
 
 	case config.Memcache:
 		err := fmt.Errorf("memcache backend not yet implemented for sliding window counter for key '%s'", cfg.Key)

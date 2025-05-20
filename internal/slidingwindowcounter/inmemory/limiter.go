@@ -1,6 +1,8 @@
-package inmemory
+package swinmemory
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -10,7 +12,7 @@ type limiter struct {
 	key        string
 	counter    sync.Map
 	windowSize time.Duration
-	limit      int
+	limit      int64
 }
 
 type slidingWindowCounter struct {
@@ -20,7 +22,7 @@ type slidingWindowCounter struct {
 	mu                  sync.Mutex
 }
 
-func NewLimiter(key string, windowSize time.Duration, limit int) *limiter {
+func NewLimiter(key string, windowSize time.Duration, limit int64) *limiter {
 	log.Printf("Initialized in-memory Sliding Window Counter limiter for key '%s' with window %s and limit %d", key, windowSize, limit)
 	return &limiter{
 		key:        key,
@@ -30,13 +32,14 @@ func NewLimiter(key string, windowSize time.Duration, limit int) *limiter {
 	}
 }
 
-func (l *limiter) Allow(identifier string) bool {
+func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 
 	tempCounter, _ := l.counter.LoadOrStore(identifier, l.initializeWindowCounter(0))
 	currentCounter, ok := tempCounter.(*slidingWindowCounter)
 	if !ok {
-		log.Printf("Could not convert loaded counter to sliding window counter")
-		return false
+		err := fmt.Errorf("unexpected state type for identifier %s in in-memory limiter '%s'", identifier, l.key)
+		log.Printf("Error in Allow for key '%s', identifier '%s': %v", l.key, identifier, err)
+		return false, err
 	}
 	currentCounter.mu.Lock()
 	defer currentCounter.mu.Unlock()
@@ -61,10 +64,10 @@ func (l *limiter) Allow(identifier string) bool {
 
 	if totalRequests < float64(l.limit) {
 		currentCounter.currentWindowCount += 1
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 
 }
 
