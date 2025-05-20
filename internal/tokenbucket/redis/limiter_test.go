@@ -21,6 +21,8 @@ func setupRedisClient(t *testing.T) *redis.Client {
 		redisAddr = "redis:6379"
 	}
 
+	t.Logf("Connecting to Redis at %s", redisAddr) // Log the Redis address
+
 	client := redis.NewClient(&redis.Options{
 		Addr: redisAddr, // Use the determined Redis address
 		DB:   0,
@@ -31,7 +33,7 @@ func setupRedisClient(t *testing.T) *redis.Client {
 
 	// Ping the Redis server to ensure connectivity
 	if _, err := client.Ping(ctx).Result(); err != nil {
-		t.Fatalf("Failed to connect to Redis: %v", err)
+		t.Fatalf("Failed to connect to Redis at %s: %v", redisAddr, err) // Log connection error
 	}
 
 	return client
@@ -164,7 +166,7 @@ func TestRedisTokenBucketConcurrencyAndEdgeCases(t *testing.T) {
 
 	// Test case 2: Edge cases
 	t.Run("EdgeCases", func(t *testing.T) {
-		 // High rate and capacity
+		// High rate and capacity
 		limiterHigh := redistb.NewLimiter(limiterKey+"_high", 1000, 10000, client)
 		for i := 0; i < 10000; i++ {
 			allowed, err := limiterHigh.Allow(ctx, fmt.Sprintf("user_high_%d", i))
