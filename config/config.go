@@ -11,6 +11,7 @@ const (
 	FixedWindowCounter   AlgorithmType = "fixed_window_counter"
 	SlidingWindowCounter AlgorithmType = "sliding_window_counter"
 	TokenBucket          AlgorithmType = "token_bucket"
+	LeakyBucket          AlgorithmType = "leaky_bucket"
 )
 
 // BackendType represents the storage backend.
@@ -36,6 +37,8 @@ type LimiterConfig struct {
 	WindowParams *WindowConfig `yaml:"window_params,omitempty"`
 	// TokenBucketParams holds parameters for the Token Bucket algorithm.
 	TokenBucketParams *TokenBucketConfig `yaml:"token_bucket_params,omitempty"`
+	// LeakyBucketParams holds parameters for the Leaky Bucket algorithm.
+	LeakyBucketParams *LeakyBucketConfig `yaml:"leaky_bucket_params,omitempty"`
 
 	// RedisParams holds configuration for the Redis backend.
 	RedisParams *RedisBackendConfig `yaml:"redis_params,omitempty"`
@@ -54,6 +57,14 @@ type WindowConfig struct {
 // TokenBucketConfig holds parameters for the Token Bucket algorithm.
 type TokenBucketConfig struct {
 	// Rate is the number of tokens to add to the bucket per second.
+	Rate int `yaml:"rate"`
+	// Capacity is the maximum number of tokens the bucket can hold.
+	Capacity int `yaml:"capacity"`
+}
+
+// LeakyBucketConfig holds parameters for the Leaky Bucket algorithm.
+type LeakyBucketConfig struct {
+	// Rate is the rate at which tokens leak from the bucket (tokens per second).
 	Rate int `yaml:"rate"`
 	// Capacity is the maximum number of tokens the bucket can hold.
 	Capacity int `yaml:"capacity"`
