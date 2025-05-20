@@ -6,11 +6,11 @@ import "sync/atomic"
 // RateLimitMetrics keeps track of rate limiting statistics.
 type RateLimitMetrics struct {
 	// TotalRequests is the total number of requests processed by the rate limiter.
-	TotalRequests    int32
+	TotalRequests int32
 	// RejectedRequests is the number of requests that were rejected due to rate limiting.
 	RejectedRequests int32
 	// AllowedRequests is the number of requests that were allowed by the rate limiter.
-	AllowedRequests  int32
+	AllowedRequests int32
 }
 
 // NewRateLimitMetrics creates a new instance of RateLimitMetrics.

@@ -28,17 +28,17 @@ type LimiterConfig struct {
 	// Algorithm is the rate limiting algorithm to use (e.g., "token_bucket").
 	Algorithm AlgorithmType `yaml:"algorithm"`
 	// Backend is the storage backend to use (e.g., "in_memory", "redis").
-	Backend   BackendType   `yaml:"backend"`
+	Backend BackendType `yaml:"backend"`
 	// Key is a unique identifier for this rate limiter configuration.
-	Key       string        `yaml:"key"`
+	Key string `yaml:"key"`
 
 	// WindowParams holds parameters for Fixed Window and Sliding Window algorithms.
-	WindowParams      *WindowConfig      `yaml:"window_params,omitempty"`
+	WindowParams *WindowConfig `yaml:"window_params,omitempty"`
 	// TokenBucketParams holds parameters for the Token Bucket algorithm.
 	TokenBucketParams *TokenBucketConfig `yaml:"token_bucket_params,omitempty"`
 
 	// RedisParams holds configuration for the Redis backend.
-	RedisParams    *RedisBackendConfig    `yaml:"redis_params,omitempty"`
+	RedisParams *RedisBackendConfig `yaml:"redis_params,omitempty"`
 	// MemcacheParams holds configuration for the Memcache backend.
 	MemcacheParams *MemcacheBackendConfig `yaml:"memcache_params,omitempty"`
 }
@@ -48,13 +48,13 @@ type WindowConfig struct {
 	// Window is the duration of the window in seconds.
 	Window time.Duration `yaml:"window"`
 	// Limit is the maximum number of requests allowed within the window.
-	Limit  int64         `yaml:"limit"`
+	Limit int64 `yaml:"limit"`
 }
 
 // TokenBucketConfig holds parameters for the Token Bucket algorithm.
 type TokenBucketConfig struct {
 	// Rate is the number of tokens to add to the bucket per unit of time.
-	Rate     int `yaml:"rate"`
+	Rate int `yaml:"rate"`
 	// Capacity is the maximum number of tokens the bucket can hold.
 	Capacity int `yaml:"capacity"`
 }
@@ -62,11 +62,11 @@ type TokenBucketConfig struct {
 // RedisBackendConfig holds parameters for the Redis backend.
 type RedisBackendConfig struct {
 	// Address is the address of the Redis server (e.g., "localhost:6379").
-	Address  string `yaml:"address"`
+	Address string `yaml:"address"`
 	// Password is the password for Redis authentication (optional).
 	Password string `yaml:"password,omitempty"`
 	// DB is the Redis database to use (optional).
-	DB       int    `yaml:"db,omitempty"`
+	DB int `yaml:"db,omitempty"`
 }
 
 // MemcacheBackendConfig holds parameters for the Memcache backend.
