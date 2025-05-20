@@ -2,10 +2,11 @@ package tbinmemory
 
 import (
 	"context"
-	"log"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
 )
 
 type limiter struct {
@@ -24,7 +25,7 @@ type tokenBucket struct {
 
 // Added key parameter to NewLimiter
 func NewLimiter(key string, rate, capacity int) *limiter {
-	log.Printf("TokenBucket(InMemory): Initialized limiter '%s' with rate %d and capacity %d", key, rate, capacity)
+	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "InMemory").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
 	return &limiter{
 		key:      key, // Store the key
 		buckets:  make(map[string]*tokenBucket),
@@ -42,7 +43,7 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	bucket, exists := l.buckets[identifier]
 	if !exists {
 		// Added limiter key and identifier to log
-		log.Printf("TokenBucket(InMemory): Limiter '%s': Creating new token bucket for identifier '%s'", l.key, identifier)
+		log.Debug().Str("limiter_type", "TokenBucket").Str("backend", "InMemory").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Creating new token bucket")
 		l.buckets[identifier] = &tokenBucket{
 			tokens:     l.capacity,
 			capacity:   l.capacity,
@@ -55,7 +56,6 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	now := time.Now()
 	numTokensAdded := int(math.Floor(now.Sub(bucket.lastRefill).Seconds() * float64(l.rate)))
 	if numTokensAdded > 0 {
-		// log.Printf("TokenBucket(InMemory): Limiter '%s': Identifier '%s': Refilled %d tokens. Old tokens: %d, New tokens: %d", l.key, identifier, numTokensAdded, bucket.tokens, min(bucket.capacity, bucket.tokens+numTokensAdded)) // Optional: verbose log
 		bucket.tokens = min(bucket.capacity, bucket.tokens+numTokensAdded)
 		bucket.lastRefill = now // Update last refill time
 	}
@@ -64,20 +64,16 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	select {
 	case <-ctx.Done():
 		// Added limiter key and identifier to log
-		log.Printf("TokenBucket(InMemory): Limiter '%s': Context cancelled for identifier '%s' during check: %v", l.key, identifier, ctx.Err())
+		log.Warn().Err(ctx.Err()).Str("limiter_type", "TokenBucket").Str("backend", "InMemory").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Context cancelled during check")
 		return false, ctx.Err()
 	default:
 		// Continue
 	}
 
-	// log.Printf("TokenBucket(InMemory): Limiter '%s': Identifier '%s': Current tokens %d, Requested 1", l.key, identifier, bucket.tokens) // Optional: verbose log
-
 	if bucket.tokens > 0 {
 		bucket.tokens -= 1
-		// log.Printf("TokenBucket(InMemory): Limiter '%s': Identifier '%s' allowed. Remaining tokens: %d", l.key, identifier, bucket.tokens) // Optional: verbose log
 		return true, nil
 	}
 
-	// log.Printf("TokenBucket(InMemory): Limiter '%s': Identifier '%s' denied. No tokens left.", l.key, identifier) // Optional: verbose log
 	return false, nil
 }

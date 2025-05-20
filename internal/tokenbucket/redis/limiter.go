@@ -3,10 +3,11 @@ package tbredis
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
+
 	"learn.ratelimiter/types"
 )
 
@@ -19,7 +20,7 @@ type Limiter struct {
 }
 
 func NewLimiter(key string, rate int, capacity int, client *redis.Client) types.Limiter {
-	log.Printf("Initialized Redis Token Bucket limiter for key '%s' with rate %d and capacity %d", key, rate, capacity)
+	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "Redis").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
 
 	return &Limiter{
 		key:      key,
@@ -47,7 +48,7 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	).Result()
 
 	if err != nil {
-		log.Printf("Redis script execution failed for limiter '%s', identifier '%s' (Redis key: %s): %v", l.key, identifier, redisKey, err)
+		log.Error().Err(err).Str("limiter_type", "TokenBucket").Str("backend", "Redis").Str("limiter_key", l.key).Str("identifier", identifier).Str("redis_key", redisKey).Msg("Limiter: Redis script execution failed")
 		return false, fmt.Errorf("redis script error for limiter '%s', identifier '%s': %w", l.key, identifier, err)
 	}
 
@@ -56,13 +57,13 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	// tokens is the number of tokens remaining after the request
 	results, ok := result.([]interface{})
 	if !ok || len(results) != 2 {
-		log.Printf("Unexpected result from redis script for limiter '%s', identifier '%s' (Redis key: %s)", l.key, identifier, redisKey)
+		log.Error().Str("limiter_type", "TokenBucket").Str("backend", "Redis").Str("limiter_key", l.key).Str("identifier", identifier).Str("redis_key", redisKey).Msg("Limiter: Unexpected result from redis script")
 		return false, fmt.Errorf("unexpected result from redis script for limiter '%s', identifier '%s'", l.key, identifier)
 	}
 
 	allowed, ok := results[0].(int64)
 	if !ok {
-		log.Printf("Unexpected allowed value type from redis script for limiter '%s', identifier '%s' (Redis key: %s)", l.key, identifier, redisKey)
+		log.Error().Str("limiter_type", "TokenBucket").Str("backend", "Redis").Str("limiter_key", l.key).Str("identifier", identifier).Str("redis_key", redisKey).Msg("Limiter: Unexpected allowed value type from redis script")
 		return false, fmt.Errorf("unexpected allowed value type from redis script for limiter '%s', identifier '%s'", l.key, identifier)
 	}
 

@@ -3,11 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
+	"os" // Import os for stderr
 	"strings"
 	"sync/atomic"
+	"time" // Import time for zerolog
+
+	"github.com/rs/zerolog"     // Import zerolog
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
 
 	ratelimiter "learn.ratelimiter/api"
 	"learn.ratelimiter/metrics"
@@ -16,47 +20,59 @@ import (
 )
 
 func main() {
-	// Define a flag for the port, defaulting to 8080
+	// Configure zerolog for console output
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+
+	// Define flags
 	port := flag.Int("p", 8080, "Port to run the HTTP server on")
-	// Define a flag for the config file path
-	configPath := flag.String("config", "config.yaml", "Path to the configuration file") // Added config flag
+	configPath := flag.String("config", "config.yaml", "Path to the configuration file")
+	logLevelStr := flag.String("log-level", "info", "Logging level (trace, debug, info, warn, error, fatal, panic)") // Add log level flag
 
 	// Parse the command-line flags
 	flag.Parse()
 
-	// Use the new function to initialize multiple limiters and get the closer
-	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath(*configPath) // Use the configPath flag value
+	// Set the global log level based on the flag
+	logLevel, err := zerolog.ParseLevel(*logLevelStr)
 	if err != nil {
-		// Improved fatal error log
-		log.Fatalf("Application startup failed: Error initializing rate limiters from config '%s': %v", *configPath, err)
+		log.Fatal().Err(err).Str("log_level", *logLevelStr).Msg("Invalid log level provided")
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
+	log.Info().Str("config_path", *configPath).Msg("Starting application initialization")
+
+	// Use the new function to initialize multiple limiters and get the closer
+	limiters, closer, err := ratelimiter.NewLimitersFromConfigPath(*configPath)
+	if err != nil {
+		// Use logger.Fatal for fatal errors
+		log.Fatal().Err(err).Str("config_path", *configPath).Msg("Application startup failed: Error initializing rate limiters from config")
 	}
 	// Defer the Close method on the returned closer
 	defer closer.Close()
 
-	log.Println("Application: All rate limiters successfully initialized.")
+	log.Info().Msg("All rate limiters successfully initialized.")
 
 	// Retrieve specific limiters from the map
 	apiRateLimiterKey := "api_rate_limit"
-	apiRateLimiter, ok := limiters[apiRateLimiterKey] // Access from the returned map
+	apiRateLimiter, ok := limiters[apiRateLimiterKey]
 	if !ok {
-		// Improved fatal error log
-		log.Fatalf("Application startup failed: Rate limiter with key '%s' not found in config", apiRateLimiterKey)
+		// Use logger.Fatal for fatal errors
+		log.Fatal().Str("limiter_key", apiRateLimiterKey).Msg("Application startup failed: Rate limiter key not found in config")
 	}
 
 	userLoginRateLimiterKey := "user_login_rate_limit_distributed"
-	userLoginRateLimiter, ok := limiters[userLoginRateLimiterKey] // Access from the returned map
+	userLoginRateLimiter, ok := limiters[userLoginRateLimiterKey]
 	if !ok {
-		// Improved fatal error log
-		log.Fatalf("Application startup failed: Rate limiter with key '%s' not found in config", userLoginRateLimiterKey)
+		// Use logger.Fatal for fatal errors
+		log.Fatal().Str("limiter_key", userLoginRateLimiterKey).Msg("Application startup failed: Rate limiter key not found in config")
 	}
 
 	// You can now use different limiters for different routes or logic
 	apiMetrics := metrics.NewRateLimitMetrics()
-	userLoginMetrics := metrics.NewRateLimitMetrics() // Example: separate metrics per limiter
+	userLoginMetrics := metrics.NewRateLimitMetrics()
 
 	// Pass the limiter key to the middleware constructor
 	apiRateLimitMiddleware := middleware.NewRateLimitMiddleware(apiRateLimiter, apiMetrics, apiRateLimiterKey)
-	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics, userLoginRateLimiterKey) // Pass the limiter key
+	userLoginRateLimitMiddleware := middleware.NewRateLimitMiddleware(userLoginRateLimiter, userLoginMetrics, userLoginRateLimiterKey)
 
 	http.HandleFunc("/unlimited", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -73,7 +89,7 @@ func main() {
 	http.HandleFunc("/login", userLoginRateLimitMiddleware.Handle(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Login attempt processed!")
-	}, getClientIP)) // You might use a different identifier func for login (e.g., username)
+	}, getClientIP))
 
 	// Update metrics endpoint to show metrics for both limiters
 	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +106,9 @@ func main() {
 
 	// Construct the address string using the parsed port
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Application: Starting HTTP server on %s...", addr) // Use Printf for formatting
-	log.Fatal(http.ListenAndServe(addr, nil))                      // Use the constructed address
+	log.Info().Str("address", addr).Msg("Starting HTTP server")
+	// Use logger.Fatal for fatal errors from ListenAndServe
+	log.Fatal().Err(http.ListenAndServe(addr, nil)).Str("address", addr).Msg("HTTP server stopped")
 }
 
 func getClientIP(r *http.Request) string {

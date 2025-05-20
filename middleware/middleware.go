@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
+
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
 
 	"learn.ratelimiter/metrics"
 	"learn.ratelimiter/types"
@@ -32,9 +33,9 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 		identifier := identifierFunc(r)
 		if identifier == "" {
 			// Log with RemoteAddr if identifier extraction fails
-			log.Printf("Limiter '%s': Warning: Could not extract identifier for request from %s", m.limiterKey, r.RemoteAddr)
+			log.Warn().Str("limiter_key", m.limiterKey).Str("remote_addr", r.RemoteAddr).Msg("Middleware: Could not extract identifier for request")
 			w.WriteHeader(http.StatusInternalServerError)
-			log.Printf("Limiter '%s': Request from %s denied due to missing identifier", m.limiterKey, r.RemoteAddr)
+			log.Error().Str("limiter_key", m.limiterKey).Str("remote_addr", r.RemoteAddr).Msg("Middleware: Request denied due to missing identifier")
 			m.metrics.RecordRequest(false)
 			return
 		}
@@ -43,10 +44,10 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 		allowed, err := m.limiter.Allow(r.Context(), identifier)
 		if err != nil {
 			// Include limiter key and identifier in error log
-			log.Printf("Limiter '%s': Error checking rate limit for identifier '%s': %v", m.limiterKey, identifier, err)
+			log.Error().Err(err).Str("limiter_key", m.limiterKey).Str("identifier", identifier).Msg("Middleware: Error checking rate limit")
 			w.WriteHeader(http.StatusInternalServerError)
 			// Include limiter key and identifier in denial log
-			log.Printf("Limiter '%s': Request for identifier '%s' denied due to limiter error", m.limiterKey, identifier)
+			log.Error().Str("limiter_key", m.limiterKey).Str("identifier", identifier).Msg("Middleware: Request denied due to limiter error")
 			m.metrics.RecordRequest(false)
 			return
 		}
@@ -58,7 +59,7 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
 			// Include limiter key, identifier, and path in denial log
-			log.Printf("Limiter '%s': Request for identifier '%s' rate limited accessing %s", m.limiterKey, identifier, r.URL.Path)
+			log.Info().Str("limiter_key", m.limiterKey).Str("identifier", identifier).Str("path", r.URL.Path).Msg("Middleware: Request rate limited")
 		}
 	}
 }

@@ -3,9 +3,11 @@ package api
 import (
 	"fmt"
 	"io"
-	"log"
 
+	// Import time for zerolog
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
+
 	apiinternal "learn.ratelimiter/api/internal"
 	"learn.ratelimiter/config"
 	"learn.ratelimiter/types"
@@ -18,27 +20,27 @@ type clientCloser struct {
 
 // Close gracefully shuts down all initialized backend clients held by the clientCloser.
 func (c *clientCloser) Close() error {
-	log.Println("API: Starting backend client shutdown...")
+	log.Info().Msg("API: Starting backend client shutdown...")
 	var errs []error
 
 	if c.clients.RedisClient != nil {
-		log.Println("API: Closing Redis client...")
+		log.Info().Msg("API: Closing Redis client...")
 		if err := c.clients.RedisClient.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close Redis client: %w", err))
-			log.Printf("API: Error closing Redis client: %v", err)
+			log.Error().Err(err).Msg("API: Error closing Redis client")
 		} else {
-			log.Println("API: Redis client closed successfully.")
+			log.Info().Msg("API: Redis client closed successfully.")
 		}
 	}
 
 	// Add closing logic for other clients (e.g., Memcache) here
 	// if c.clients.MemcacheClient != nil {
-	// 	log.Println("API: Closing Memcache client...")
+	// 	log.Info().Msg("API: Closing Memcache client...")
 	// 	if err := c.clients.MemcacheClient.Close(); err != nil {
 	// 		errs = append(errs, fmt.Errorf("failed to close Memcache client: %w", err))
-	// 		log.Printf("API: Error closing Memcache client: %v", err)
+	// 		log.Error().Err(err).Msg("API: Error closing Memcache client")
 	// 	} else {
-	// 		log.Println("API: Memcache client closed successfully.")
+	// 		log.Info().Msg("API: Memcache client closed successfully.")
 	// 	}
 	// }
 
@@ -47,24 +49,24 @@ func (c *clientCloser) Close() error {
 		return fmt.Errorf("errors during client shutdown: %v", errs)
 	}
 
-	log.Println("API: Backend client shutdown complete.")
+	log.Info().Msg("API: Backend client shutdown complete.")
 	return nil
 }
 
 // NewLimitersFromConfigPath loads config, initializes any needed backend clients,
 // and returns a map of rate limiters and an io.Closer for backend clients.
 func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.Closer, error) {
-	log.Printf("API: Starting initialization of rate limiters from config path: %s", configPath)
+	log.Info().Str("config_path", configPath).Msg("API: Starting initialization of rate limiters from config path")
 	cfgFile, err := apiinternal.LoadConfig(configPath)
 	if err != nil {
-		// Improved error log
-		log.Printf("API: Initialization failed: Error loading configuration from %s: %v", configPath, err)
+		// Improved error log with structured fields
+		log.Error().Err(err).Str("config_path", configPath).Msg("API: Initialization failed: Error loading configuration")
 		return nil, nil, fmt.Errorf("error loading configuration: %w", err)
 	}
 
 	if len(cfgFile.Limiters) == 0 {
-		// Improved log
-		log.Printf("API: Initialization failed: No limiter configurations found in %s", configPath)
+		// Improved log with structured fields
+		log.Error().Str("config_path", configPath).Msg("API: Initialization failed: No limiter configurations found")
 		return nil, nil, fmt.Errorf("no limiter configurations found in %s", configPath)
 	}
 
@@ -80,7 +82,7 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 	}
 
 	if needsRedis {
-		log.Println("API: Redis backend required for one or more limiters. Initializing Redis client...")
+		log.Info().Msg("API: Redis backend required for one or more limiters. Initializing Redis client...")
 		var redisCfg *config.LimiterConfig
 		for _, cfg := range cfgFile.Limiters {
 			if cfg.Backend == config.Redis {
@@ -91,14 +93,14 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 		if redisCfg == nil {
 			// This case should ideally not happen if needsRedis is true, but as a safeguard
 			err := fmt.Errorf("logic error: needsRedis is true but no Redis config found")
-			log.Printf("API: Initialization failed: %v", err)
+			log.Error().Err(err).Msg("API: Initialization failed")
 			return nil, nil, err
 		}
 
 		redisClient, err = apiinternal.InitRedisClient(redisCfg)
 		if err != nil {
-			// Improved error log
-			log.Printf("API: Initialization failed: Failed to initialize Redis client: %v", err)
+			// Improved error log with structured fields
+			log.Error().Err(err).Msg("API: Initialization failed: Failed to initialize Redis client")
 			return nil, nil, err // initRedisClient already wraps the error
 		}
 		backendClients.RedisClient = redisClient
@@ -109,38 +111,38 @@ func NewLimitersFromConfigPath(configPath string) (map[string]types.Limiter, io.
 
 	limiters := make(map[string]types.Limiter)
 
-	log.Printf("API: Creating %d limiter instances...", len(cfgFile.Limiters))
+	log.Info().Int("count", len(cfgFile.Limiters)).Msg("API: Creating limiter instances...")
 	for _, cfg := range cfgFile.Limiters {
-		log.Printf("API: Creating limiter '%s' (Algorithm: %s, Backend: %s)...", cfg.Key, cfg.Algorithm, cfg.Backend)
+		log.Info().Str("limiter_key", cfg.Key).Str("algorithm", string(cfg.Algorithm)).Str("backend", string(cfg.Backend)).Msg("API: Creating limiter...")
 		if cfg.Key == "" {
 			err := fmt.Errorf("limiter configuration missing 'key' field")
-			// Improved error log
-			log.Printf("API: Initialization failed for a limiter: %v", err)
+			// Improved error log with structured fields
+			log.Error().Err(err).Msg("API: Initialization failed for a limiter")
 			return nil, nil, err
 		}
 
 		limiterFactory, err := NewLimiterFactory(cfg)
 		if err != nil {
 			err = fmt.Errorf("limiter '%s': failed to get factory: %w", cfg.Key, err)
-			// Improved error log
-			log.Printf("API: Initialization failed for limiter '%s': %v", cfg.Key, err)
+			// Improved error log with structured fields
+			log.Error().Err(err).Str("limiter_key", cfg.Key).Msg("API: Initialization failed: Failed to get factory")
 			return nil, nil, err
 		}
 
 		limiter, err := limiterFactory.CreateLimiter(cfg, backendClients)
 		if err != nil {
 			err = fmt.Errorf("limiter '%s': failed to create instance: %w", cfg.Key, err)
-			// Improved error log
-			log.Printf("API: Initialization failed for limiter '%s': %v", cfg.Key, err)
+			// Improved error log with structured fields
+			log.Error().Err(err).Str("limiter_key", cfg.Key).Msg("API: Initialization failed: Failed to create instance")
 			return nil, nil, err
 		}
 
 		limiters[cfg.Key] = limiter
-		// Improved success log
-		log.Printf("API: Limiter '%s' (Algorithm: %s, Backend: %s) created successfully.", cfg.Key, cfg.Algorithm, cfg.Backend)
+		// Improved success log with structured fields
+		log.Info().Str("limiter_key", cfg.Key).Str("algorithm", string(cfg.Algorithm)).Str("backend", string(cfg.Backend)).Msg("API: Limiter created successfully.")
 	}
 
-	log.Println("API: All rate limiters initialized.")
+	log.Info().Msg("API: All rate limiters initialized.")
 
 	closer := &clientCloser{clients: backendClients}
 	return limiters, closer, nil

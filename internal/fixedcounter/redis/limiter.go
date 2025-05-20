@@ -3,10 +3,10 @@ package fcredis
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
 )
 
 // Limiter implements the Fixed Window Counter algorithm using Redis.
@@ -20,7 +20,7 @@ type Limiter struct {
 
 // Added key parameter to NewLimiter
 func NewLimiter(client *redis.Client, key string, window time.Duration, limit int64) *Limiter {
-	log.Printf("FixedWindowCounter(Redis): Initialized limiter '%s' with window %s and limit %d", key, window, limit)
+	log.Info().Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", window).Int64("limit", limit).Msg("Limiter: Initialized")
 	return &Limiter{
 		client: client,
 		key:    key, // Store the key
@@ -44,12 +44,10 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 		expirySeconds = 1
 	}
 
-	// log.Printf("FixedWindowCounter(Redis): Checking limiter '%s' for identifier '%s' (Redis key: %s)", l.key, identifier, redisKey) // Optional: verbose log
-
 	result, err := l.script.Run(ctx, l.client, []string{redisKey}, nowMillis, windowMillis, l.limit, expirySeconds).Result()
 	if err != nil {
 		// Added limiter key and identifier to error log
-		log.Printf("FixedWindowCounter(Redis): Limiter '%s': Script execution failed for identifier '%s' (Redis key: %s): %v", l.key, identifier, redisKey, err)
+		log.Error().Err(err).Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", l.key).Str("identifier", identifier).Str("redis_key", redisKey).Msg("Limiter: Redis script execution failed")
 		return false, fmt.Errorf("redis script execution failed for limiter '%s', identifier '%s': %w", l.key, identifier, err)
 	}
 
@@ -57,13 +55,11 @@ func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	if !ok {
 		err := fmt.Errorf("unexpected script result type: %T for key '%s', identifier '%s'", result, l.key, identifier)
 		// Added limiter key and identifier to error log
-		log.Printf("FixedWindowCounter(Redis): Limiter '%s': Unexpected script result type for identifier '%s' (Redis key: %s): %T", l.key, identifier, redisKey, result)
+		log.Error().Err(err).Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", l.key).Str("identifier", identifier).Str("redis_key", redisKey).Type("result_type", result).Msg("Limiter: Unexpected script result type")
 		return false, err
 	}
 
 	isAllowed := allowed == 1
-	// Optional: log allowed/denied status
-	// log.Printf("FixedWindowCounter(Redis): Limiter '%s': Identifier '%s' %s", l.key, identifier, map[bool]string{true: "allowed", false: "denied"}[isAllowed])
 
 	return isAllowed, nil
 }

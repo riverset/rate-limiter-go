@@ -2,7 +2,8 @@ package factory
 
 import (
 	"fmt"
-	"log"
+
+	"github.com/rs/zerolog/log" // Import zerolog's global logger
 
 	"learn.ratelimiter/config"
 	tbinmemory "learn.ratelimiter/internal/tokenbucket/inmemory"
@@ -17,35 +18,36 @@ func NewTokenBucketFactory() (*TokenBucketFactory, error) {
 }
 
 func (*TokenBucketFactory) CreateLimiter(cfg config.LimiterConfig, clients types.BackendClients) (types.Limiter, error) {
+	log.Info().Str("factory", "TokenBucket").Str("limiter_key", cfg.Key).Str("backend", string(cfg.Backend)).Msg("Factory: Creating limiter")
 	if cfg.TokenBucketParams == nil {
 		err := fmt.Errorf("token bucket parameters are missing in config for key '%s'", cfg.Key)
-		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
+		log.Error().Err(err).Str("factory", "TokenBucket").Str("limiter_key", cfg.Key).Msg("Factory: Creation failed")
 		return nil, err
 	}
 
 	switch cfg.Backend {
 	case config.InMemory:
 		// Added parameters to log
-		log.Printf("Factory(TokenBucket): Creating in-memory limiter for key '%s' with rate %d, capacity %d", cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity)
+		log.Info().Str("factory", "TokenBucket").Str("backend", "InMemory").Str("limiter_key", cfg.Key).Int("rate", cfg.TokenBucketParams.Rate).Int("capacity", cfg.TokenBucketParams.Capacity).Msg("Factory: Creating in-memory limiter")
 		// Assuming the inmemory package has a New function matching the signature
 		return tbinmemory.NewLimiter(cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity), nil // Pass key to in-memory limiter
 	case config.Redis:
 		// Added parameters to log
-		log.Printf("Factory(TokenBucket): Creating Redis limiter for key '%s' with rate %d, capacity %d", cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity)
+		log.Info().Str("factory", "TokenBucket").Str("backend", "Redis").Str("limiter_key", cfg.Key).Int("rate", cfg.TokenBucketParams.Rate).Int("capacity", cfg.TokenBucketParams.Capacity).Msg("Factory: Creating Redis limiter")
 		if clients.RedisClient == nil {
 			err := fmt.Errorf("redis client is required but not provided for redis backend for key '%s'", cfg.Key)
-			log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
+			log.Error().Err(err).Str("factory", "TokenBucket").Str("backend", "Redis").Str("limiter_key", cfg.Key).Msg("Factory: Creation failed")
 			return nil, err
 		}
 		return redistb.NewLimiter(cfg.Key, cfg.TokenBucketParams.Rate, cfg.TokenBucketParams.Capacity, clients.RedisClient), nil
 
 	case config.Memcache:
 		err := fmt.Errorf("memcache backend not yet implemented for token bucket for key '%s'", cfg.Key)
-		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
+		log.Error().Err(err).Str("factory", "TokenBucket").Str("backend", "Memcache").Str("limiter_key", cfg.Key).Msg("Factory: Creation failed")
 		return nil, err
 	default:
 		err := fmt.Errorf("unsupported backend type '%s' for token bucket for key '%s'", cfg.Backend, cfg.Key)
-		log.Printf("Factory(TokenBucket): Creation failed for key '%s': %v", cfg.Key, err)
+		log.Error().Err(err).Str("factory", "TokenBucket").Str("backend", string(cfg.Backend)).Str("limiter_key", cfg.Key).Msg("Factory: Creation failed")
 		return nil, err
 	}
 }
