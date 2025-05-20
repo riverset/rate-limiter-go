@@ -51,7 +51,7 @@ func (m *RateLimitMiddleware) Handle(next http.HandlerFunc, identifierFunc func(
 			next.ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
-			log.Printf("Request rate limited for %s", identifier)
+			log.Printf("Request rate limited for %s accessing %s", identifier, r.URL.Path)
 		}
 	}
 }
