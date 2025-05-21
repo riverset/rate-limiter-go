@@ -2,20 +2,17 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]          # code merged into main → alpha release
+    branches: [main]
   pull_request:
-    branches: [main]          # run tests on PRs
+    branches: [main]
   release:
-    types: [created]          # publish-button → full release
+    types: [created]
 
-###########################################################################
-# 1. TEST JOB
-###########################################################################
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: golang:1.23.4   # same env as prod build
-
+    container:
+      image: golang:1.23.4
     services:
       redis:
         image: redis
@@ -24,90 +21,62 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
       - run: go mod tidy
       - run: go test ./... -v
 
-###########################################################################
-# 2. BUILD  (shared artefact)
-###########################################################################
   build:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # required for later release jobs
-
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: 1.23.4
-
       - run: go build -o rate-limiter-go
-
-      # Upload the binary as a build artefact so the next job can pick it up
-      - name: Upload build artefact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: rate-limiter-go
           path: rate-limiter-go
 
-###########################################################################
-# 3a. ALPHA PRE-RELEASE  (push to main)
-###########################################################################
   release-alpha:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: rate-limiter-go
-
-      - name: Create alpha GitHub release
-        id: alpha
-        uses: softprops/action-gh-release@v1   # nicer API than actions/create-release
+      - uses: softprops/action-gh-release@v1
         with:
           tag_name: v0.0.1-alpha.${{ github.run_number }}
           name: v0.0.1-alpha.${{ github.run_number }}
           prerelease: true
           draft: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload binary to alpha release
-        uses: softprops/action-gh-release@v1
-        with:
           files: rate-limiter-go
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-###########################################################################
-# 3b. PRODUCTION RELEASE  (release: created)
-###########################################################################
   release-prod:
     needs: build
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: rate-limiter-go
-
-      # Upload the artefact to the *already-created* GitHub Release
-      - name: Upload binary to production release
-        uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: rate-limiter-go
           prerelease: false
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
