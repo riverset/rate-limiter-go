@@ -9,6 +9,7 @@ A Go implementation of various rate limiting algorithms with support for differe
 *   Flexible configuration via a YAML file.
 *   Graceful shutdown of backend clients.
 *   Integration points for metrics and middleware.
+*   Exposes application metrics via the `/metrics` endpoint.
 
 ## Supported Algorithms
 
