@@ -2,22 +2,19 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]          # code merged into main → alpha release
   pull_request:
-    branches:
-      - main
+    branches: [main]          # run tests on PRs
   release:
-    types:
-      - created
+    types: [created]          # publish-button → full release
 
+###########################################################################
+# 1. TEST JOB
+###########################################################################
 jobs:
   test:
-    name: Run Tests
     runs-on: ubuntu-latest
-    # Run your Go tests inside a Go container on the same network as the Redis service
-    container:
-      image: golang:1.23.4
+    container: golang:1.23.4   # same env as prod build
 
     services:
       redis:
@@ -29,49 +26,88 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - run: go mod tidy
+      - run: go test ./... -v
 
-      - name: Install dependencies
-        run: go mod tidy
-
-      - name: Run tests
-        run: go test ./... -v
-
-  build-and-release:
-    name: Build and Release
-    runs-on: ubuntu-latest
+###########################################################################
+# 2. BUILD  (shared artefact)
+###########################################################################
+  build:
     needs: test
-    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # required for later release jobs
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
         with:
           go-version: 1.23.4
 
-      - name: Build project
-        run: go build -o rate-limiter-go
+      - run: go build -o rate-limiter-go
 
-      - name: Create GitHub Release
-        uses: actions/create-release@v1
+      # Upload the binary as a build artefact so the next job can pick it up
+      - name: Upload build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rate-limiter-go
+          path: rate-limiter-go
+
+###########################################################################
+# 3a. ALPHA PRE-RELEASE  (push to main)
+###########################################################################
+  release-alpha:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rate-limiter-go
+
+      - name: Create alpha GitHub release
+        id: alpha
+        uses: softprops/action-gh-release@v1   # nicer API than actions/create-release
+        with:
+          tag_name: v0.0.1-alpha.${{ github.run_number }}
+          name: v0.0.1-alpha.${{ github.run_number }}
+          prerelease: true
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload binary to alpha release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: rate-limiter-go
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+###########################################################################
+# 3b. PRODUCTION RELEASE  (release: created)
+###########################################################################
+  release-prod:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rate-limiter-go
+
+      # Upload the artefact to the *already-created* GitHub Release
+      - name: Upload binary to production release
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          release_name: ${{ github.event.release.name }}
-          draft: false
+          files: rate-limiter-go
           prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./rate-limiter-go
-          asset_name: rate-limiter-go
-          asset_content_type: application/octet-stream
