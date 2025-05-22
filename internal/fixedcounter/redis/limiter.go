@@ -18,19 +18,37 @@ type Limiter struct {
 	window time.Duration
 	limit  int64
 	script *redis.Script
+	// nowFunc provides the current time, defaults to time.Now. Used for testing.
+	nowFunc func() time.Time
+}
+
+// NewLimiterOption is a function type for setting options on a Limiter.
+type NewLimiterOption func(*Limiter)
+
+// WithClock sets a custom clock (nowFunc) for the Limiter.
+func WithClock(nowFunc func() time.Time) NewLimiterOption {
+	return func(l *Limiter) {
+		l.nowFunc = nowFunc
+	}
 }
 
 // NewLimiter creates a new Redis-based Fixed Window Counter limiter.
 // It takes a Redis client instance, a unique key for the limiter, the size of the window, and the maximum limit of requests within the window.
-func NewLimiter(client *redis.Client, key string, window time.Duration, limit int64) *Limiter {
-	log.Info().Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", window).Int64("limit", limit).Msg("Limiter: Initialized")
-	return &Limiter{
-		client: client,
-		key:    key, // Store the key
-		window: window,
-		limit:  limit,
-		script: redisAllowScript,
+// Options can be provided to customize the limiter, e.g., by providing a custom clock for testing.
+func NewLimiter(client *redis.Client, key string, window time.Duration, limit int64, opts ...NewLimiterOption) *Limiter {
+	limiter := &Limiter{
+		client:  client,
+		key:     key,
+		window:  window,
+		limit:   limit,
+		script:  redisAllowScript,
+		nowFunc: time.Now, // Default clock
 	}
+	for _, opt := range opts {
+		opt(limiter)
+	}
+	log.Info().Str("limiter_type", "FixedWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", window).Int64("limit", limit).Msg("Limiter: Initialized")
+	return limiter
 }
 
 // Allow checks if a request for the given identifier is allowed using a Redis Lua script.
@@ -38,7 +56,7 @@ func NewLimiter(client *redis.Client, key string, window time.Duration, limit in
 func (l *Limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	redisKey := l.key + ":" + identifier
 
-	nowMillis := time.Now().UnixMilli()
+	nowMillis := l.nowFunc().UnixMilli()
 	windowMillis := l.window.Milliseconds()
 	expirySeconds := int64(l.window.Seconds()) // Use window duration for expiry
 

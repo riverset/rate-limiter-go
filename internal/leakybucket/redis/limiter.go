@@ -63,25 +63,42 @@ type limiter struct {
 	capacity int
 	client   *redis.Client
 	script   *redis.Script
+	// nowFunc provides the current time, defaults to time.Now. Used for testing.
+	nowFunc func() time.Time
+}
+
+// NewLimiterOption is a function type for setting options on a Limiter.
+type NewLimiterOption func(*limiter)
+
+// WithClock sets a custom clock (nowFunc) for the Limiter.
+func WithClock(nowFunc func() time.Time) NewLimiterOption {
+	return func(l *limiter) {
+		l.nowFunc = nowFunc
+	}
 }
 
 // NewLimiter creates a new Redis Leaky Bucket limiter.
-func NewLimiter(key string, rate, capacity int, client *redis.Client) types.Limiter {
-	log.Info().Str("limiter_type", "LeakyBucket").Str("backend", "Redis").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
-	script := redis.NewScript(leakyBucketLuaScript)
-	return &limiter{
+// Options can be provided to customize the limiter, e.g., by providing a custom clock for testing.
+func NewLimiter(key string, rate, capacity int, client *redis.Client, opts ...NewLimiterOption) types.Limiter {
+	limiterObj := &limiter{
 		key:      key,
 		rate:     rate,
 		capacity: capacity,
 		client:   client,
-		script:   script,
+		script:   redis.NewScript(leakyBucketLuaScript),
+		nowFunc:  time.Now, // Default clock
 	}
+	for _, opt := range opts {
+		opt(limiterObj)
+	}
+	log.Info().Str("limiter_type", "LeakyBucket").Str("backend", "Redis").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
+	return limiterObj
 }
 
 // Allow checks if a request for the given identifier is allowed based on the Leaky Bucket algorithm.
 func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	itemKey := fmt.Sprintf("leaky_bucket:%s:%s", l.key, identifier)
-	now := time.Now().UnixNano() / int64(time.Millisecond)
+	now := l.nowFunc().UnixNano() / int64(time.Millisecond)
 
 	result, err := l.script.Run(ctx, l.client, []string{itemKey}, l.capacity, l.rate, now).Result()
 	if err != nil {

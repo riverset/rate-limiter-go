@@ -4,73 +4,28 @@ package tbredis_test
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+	// "os" // No longer needed directly here
 
-	"github.com/go-redis/redis/v8"
+	// "github.com/go-redis/redis/v8" // No longer needed directly here
+	"learn.ratelimiter/internal/testharness/redistest" // Import shared helper
 	redistb "learn.ratelimiter/internal/tokenbucket/redis"
 )
 
-// setupRedisClient initializes a Redis client for testing.
-// It assumes a Redis instance is running on the default address.
-func setupRedisClient(t *testing.T) *redis.Client {
-	redisAddr := "localhost:6379"
-	// Check if running in GitHub Actions CI
-	if os.Getenv("CI") == "true" {
-		redisAddr = "redis:6379"
-	}
-
-	t.Logf("Connecting to Redis at %s", redisAddr) // Log the Redis address
-
-	client := redis.NewClient(&redis.Options{
-		Addr: redisAddr, // Use the determined Redis address
-		DB:   0,
-	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Ping the Redis server to ensure connectivity
-	if _, err := client.Ping(ctx).Result(); err != nil {
-		t.Fatalf("Failed to connect to Redis at %s: %v", redisAddr, err) // Log connection error
-	}
-
-	return client
-}
-
-// cleanupRedis clears keys used by a specific limiter key from Redis.
-func cleanupRedis(t *testing.T, client *redis.Client, limiterKey string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Use SCAN and DEL to find and delete keys with the limiter key prefix
-	iter := client.Scan(ctx, 0, fmt.Sprintf("token_bucket:%s:*", limiterKey), 0).Iterator()
-	var keysToDelete []string
-	for iter.Next(ctx) {
-		keysToDelete = append(keysToDelete, iter.Val())
-	}
-	if err := iter.Err(); err != nil {
-		t.Fatalf("Failed to scan keys for cleanup: %v", err)
-	}
-
-	if len(keysToDelete) > 0 {
-		if _, err := client.Del(ctx, keysToDelete...).Result(); err != nil {
-			t.Fatalf("Failed to delete keys during cleanup: %v", err)
-		}
-	}
-}
+// const tokenBucketPatternPrefix = "token_bucket" // This constant is not strictly necessary if keys are managed per test.
 
 func TestRedisTokenBucketLimiter(t *testing.T) {
-	client := setupRedisClient(t)
+	client := redistest.SetupRedisClient(t) 
 	defer client.Close()
 
-	limiterKey := "test_redis_token_bucket"
-	cleanupRedis(t, client, limiterKey)
+	baseLimiterKey := "test_redis_tb_limiter" // Use a base key for this test suite
+	ctx := context.Background()
 
 	// Test case 1: Basic rate limiting within capacity
-	limiter1 := redistb.NewLimiter(limiterKey+"_basic", 10, 50, client)
-	ctx := context.Background()
+	limiter1Key := baseLimiterKey + "_basic"
+	redistest.CleanupRedisKeys(t, client, limiter1Key, "") 
+	limiter1 := redistb.NewLimiter(limiter1Key, 10, 50, client)
 
 	for i := 0; i < 50; i++ {
 		allowed, err := limiter1.Allow(ctx, "user1")
@@ -83,7 +38,7 @@ func TestRedisTokenBucketLimiter(t *testing.T) {
 	}
 
 	// Test case 2: Deny requests over capacity
-	allowed, err := limiter1.Allow(ctx, "user1")
+	allowed, err := limiter1.Allow(ctx, "user1") // This is still user1 for limiter1Key
 	if err != nil {
 		t.Fatalf("TestBasic: Allow failed on request after capacity: %v", err)
 	}
@@ -92,8 +47,8 @@ func TestRedisTokenBucketLimiter(t *testing.T) {
 	}
 
 	// Test case 3: Token refill over time
-	limiter2Key := limiterKey + "_refill"
-	cleanupRedis(t, client, limiter2Key)
+	limiter2Key := baseLimiterKey + "_refill" // Use baseLimiterKey
+	redistest.CleanupRedisKeys(t, client, limiter2Key, "") // Clean for this sub-test
 	limiter2 := redistb.NewLimiter(limiter2Key, 10, 10, client) // Rate 10/sec, Capacity 10
 
 	// Consume all initial tokens
@@ -121,16 +76,19 @@ func TestRedisTokenBucketLimiter(t *testing.T) {
 }
 
 func TestRedisTokenBucketConcurrencyAndEdgeCases(t *testing.T) {
-	client := setupRedisClient(t)
+	client := redistest.SetupRedisClient(t) // Use shared helper
 	defer client.Close()
 
-	limiterKey := "test_redis_token_bucket_concurrency"
-	cleanupRedis(t, client, limiterKey)
-
-	limiter := redistb.NewLimiter(limiterKey, 10, 50, client) // Rate 10/sec, Capacity 50
-	ctx := context.Background()
+	limiterKeyBase := "test_redis_token_bucket_concurrency" 
+	ctx := context.Background() // Define ctx
 
 	// Test case 1: Concurrency
+	// Note: Concurrency tests on a shared Redis can be flaky if keys are not isolated.
+	// Using a unique key for the concurrency part of the test.
+	concurrencyLimiterKey := limiterKeyBase + "_concurrency_run" 
+	redistest.CleanupRedisKeys(t, client, concurrencyLimiterKey, "")
+	limiter := redistb.NewLimiter(concurrencyLimiterKey, 10, 50, client) 
+	
 	t.Run("Concurrency", func(t *testing.T) {
 		concurrentRequests := 100
 		allowedCount := 0
@@ -167,8 +125,10 @@ func TestRedisTokenBucketConcurrencyAndEdgeCases(t *testing.T) {
 	// Test case 2: Edge cases
 	t.Run("EdgeCases", func(t *testing.T) {
 		// High rate and capacity
-		limiterHigh := redistb.NewLimiter(limiterKey+"_high", 1000, 10000, client)
-		for i := 0; i < 10000; i++ {
+		edgeLimiterKey := limiterKeyBase + "_high"
+		redistest.CleanupRedisKeys(t, client, edgeLimiterKey, "")
+		limiterHigh := redistb.NewLimiter(edgeLimiterKey, 1000, 10000, client)
+		for i := 0; i < 10000; i++ { // This will create 10000 different identifiers
 			allowed, err := limiterHigh.Allow(ctx, fmt.Sprintf("user_high_%d", i))
 			if err != nil {
 				t.Fatalf("Edge case test failed: %v", err)

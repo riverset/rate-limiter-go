@@ -38,15 +38,22 @@ func NewLimiter(key string, rate, capacity int) types.Limiter {
 
 // Allow checks if a request for the given identifier is allowed based on the Leaky Bucket algorithm.
 func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
+	if ctx.Err() != nil {
+		log.Warn().Err(ctx.Err()).Str("limiter_type", "LeakyBucket").Str("backend", "InMemory").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Context cancelled before processing")
+		return false, ctx.Err()
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	now := time.Now()
 	elapsed := now.Sub(l.lastLeak)
-	leakedAmount := elapsed.Seconds() * float64(l.rate)
 
-	l.currentLevel = math.Max(0, l.currentLevel-leakedAmount)
-	l.lastLeak = now
+	if l.rate > 0 { // Only leak if rate is positive
+		leakedAmount := elapsed.Seconds() * float64(l.rate)
+		l.currentLevel = math.Max(0, l.currentLevel-leakedAmount)
+	}
+	l.lastLeak = now // Always update lastLeak time
 
 	if l.currentLevel+1 <= float64(l.capacity) {
 		l.currentLevel++

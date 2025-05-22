@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/rs/zerolog/log"
 
+	"learn.ratelimiter/internal/memcacheiface" // Use the new interface
 	"learn.ratelimiter/types"
 )
 
@@ -19,7 +19,8 @@ type limiter struct {
 	key      string
 	capacity int
 	rate     int
-	client   *memcache.Client
+	client   memcacheiface.Client // Use the interface
+	nowFunc  func() time.Time
 }
 
 // tokenBucketState represents the state of a token bucket stored in Memcache.
@@ -28,15 +29,30 @@ type tokenBucketState struct {
 	LastRefill time.Time `json:"last_refill"`
 }
 
+// NewLimiterOption is a function type for setting options on a Limiter.
+type NewLimiterOption func(*limiter)
+
+// WithClock sets a custom clock (nowFunc) for the Limiter.
+func WithClock(nowFunc func() time.Time) NewLimiterOption {
+	return func(l *limiter) {
+		l.nowFunc = nowFunc
+	}
+}
+
 // NewLimiter creates a new Memcache Token Bucket limiter.
-func NewLimiter(key string, rate, capacity int, client *memcache.Client) types.Limiter {
-	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "Memcache").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
-	return &limiter{
+func NewLimiter(key string, rate, capacity int, client memcacheiface.Client, opts ...NewLimiterOption) types.Limiter {
+	limiterObj := &limiter{
 		key:      key,
 		rate:     rate,
 		capacity: capacity,
 		client:   client,
+		nowFunc:  time.Now, // Default clock
 	}
+	for _, opt := range opts {
+		opt(limiterObj)
+	}
+	log.Info().Str("limiter_type", "TokenBucket").Str("backend", "Memcache").Str("limiter_key", key).Int("rate", rate).Int("capacity", capacity).Msg("Limiter: Initialized")
+	return limiterObj
 }
 
 // Allow checks if a request for the given identifier is allowed based on the Token Bucket algorithm.
@@ -50,24 +66,31 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 		return false, fmt.Errorf("get state from memcache: %w", err)
 	}
 
+	now := l.nowFunc() // Use injected clock
 	state := &tokenBucketState{
 		Tokens:     int64(l.capacity),
-		LastRefill: time.Now(),
+		LastRefill: now, // Initialize with current time from clock
 	}
 
-	if item != nil {
+	if item != nil { // State exists in Memcache
 		if err := json.Unmarshal(item.Value, state); err != nil {
 			log.Error().Err(err).Str("limiter_type", "TokenBucket").Str("backend", "Memcache").Str("limiter_key", l.key).Str("identifier", identifier).Msg("Limiter: Failed to unmarshal state from Memcache")
 			return false, fmt.Errorf("unmarshal state: %w", err)
 		}
+		// Refill tokens based on time elapsed since lastRefill from stored state
+		elapsed := now.Sub(state.LastRefill)
+		if elapsed.Seconds() > 0 { // Ensure time has actually passed to prevent negative refills if clock is manipulated weirdly
+			refillAmount := int64(float64(l.rate) * elapsed.Seconds())
+			state.Tokens += refillAmount
+			if state.Tokens > int64(l.capacity) {
+				state.Tokens = int64(l.capacity)
+			}
+		}
 	}
+	// For a new item (cache miss), state.Tokens is already l.capacity, LastRefill is 'now'.
+	// No refill calculation needed for a brand new bucket.
 
-	// Refill tokens
-	now := time.Now()
-	elapsed := now.Sub(state.LastRefill)
-	refillAmount := int64(float64(l.rate) * elapsed.Seconds())
-	state.Tokens = int64(math.Min(float64(state.Tokens)+float64(refillAmount), float64(l.capacity)))
-	state.LastRefill = now
+	state.LastRefill = now // Always update lastRefill to current time
 
 	// Check if allowed
 	if state.Tokens >= 1 {
