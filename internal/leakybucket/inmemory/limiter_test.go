@@ -82,3 +82,106 @@ func TestLeakyBucketLimiter(t *testing.T) {
 		}
 	})
 }
+
+func TestLeakyBucketLimiter_ZeroRate(t *testing.T) {
+	limiter := lbinmemory.NewLimiter("test_zero_rate", 0, 10) // Rate: 0 tokens/sec, Capacity: 10
+	ctx := context.Background()
+
+	// Requests should be denied as rate is 0
+	// First, fill the capacity. These should be allowed.
+	capacity := 10
+	for i := 0; i < capacity; i++ {
+		allowed, err := limiter.Allow(ctx, "user1")
+		if err != nil {
+			t.Fatalf("Unexpected error during capacity fill: %v", err)
+		}
+		if !allowed {
+			t.Fatalf("Request %d/%d unexpectedly denied during capacity fill with zero rate", i+1, capacity)
+		}
+	}
+
+	// Next request should be denied as rate is 0 and capacity is full
+	allowed, err := limiter.Allow(ctx, "user1")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatalf("Request unexpectedly allowed with zero rate after capacity is full")
+	}
+}
+
+func TestLeakyBucketLimiter_NegativeRate(t *testing.T) {
+	limiter := lbinmemory.NewLimiter("test_negative_rate", -1, 10) // Rate: -1 tokens/sec, Capacity: 10
+	ctx := context.Background()
+	capacity := 10
+
+	// First, fill the capacity. These should be allowed.
+	for i := 0; i < capacity; i++ {
+		allowed, err := limiter.Allow(ctx, "user1")
+		if err != nil {
+			t.Fatalf("Unexpected error during capacity fill: %v", err)
+		}
+		if !allowed {
+			t.Fatalf("Request %d/%d unexpectedly denied during capacity fill with negative rate", i+1, capacity)
+		}
+	}
+
+	// Next request should be denied as rate is negative and capacity is full
+	allowed, err := limiter.Allow(ctx, "user1")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatalf("Request unexpectedly allowed with negative rate after capacity is full")
+	}
+}
+
+func TestLeakyBucketLimiter_ZeroCapacity(t *testing.T) {
+	limiter := lbinmemory.NewLimiter("test_zero_capacity", 5, 0) // Rate: 5 tokens/sec, Capacity: 0
+	ctx := context.Background()
+
+	// Requests should be denied as capacity is 0
+	allowed, err := limiter.Allow(ctx, "user1")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatalf("Request unexpectedly allowed with zero capacity")
+	}
+}
+
+func TestLeakyBucketLimiter_NegativeCapacity(t *testing.T) {
+	limiter := lbinmemory.NewLimiter("test_negative_capacity", 5, -1) // Rate: 5 tokens/sec, Capacity: -1
+	ctx := context.Background()
+
+	// Requests should be denied as capacity is negative
+	allowed, err := limiter.Allow(ctx, "user1")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatalf("Request unexpectedly allowed with negative capacity")
+	}
+}
+
+func TestLeakyBucketLimiter_ContextCancellation(t *testing.T) {
+	limiter := lbinmemory.NewLimiter("test_context_cancellation", 1, 1) // Rate: 1 token/sec, Capacity: 1
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Allow one request
+	_, err := limiter.Allow(ctx, "user1")
+	if err != nil {
+		t.Fatalf("Allow failed: %v", err)
+	}
+
+	// Cancel context before next request
+	cancel()
+
+	_, err = limiter.Allow(ctx, "user1")
+	if err == nil {
+		t.Fatalf("Expected error due to context cancellation, but got nil")
+	}
+	if err != context.Canceled {
+		t.Fatalf("Expected context.Canceled error, but got %v", err)
+	}
+}

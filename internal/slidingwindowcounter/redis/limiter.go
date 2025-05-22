@@ -18,19 +18,37 @@ type limiter struct {
 	windowSize time.Duration
 	limit      int64
 	script     *redis.Script
+	// nowFunc provides the current time, defaults to time.Now. Used for testing.
+	nowFunc func() time.Time
+}
+
+// NewLimiterOption is a function type for setting options on a Limiter.
+type NewLimiterOption func(*limiter)
+
+// WithClock sets a custom clock (nowFunc) for the Limiter.
+func WithClock(nowFunc func() time.Time) NewLimiterOption {
+	return func(l *limiter) {
+		l.nowFunc = nowFunc
+	}
 }
 
 // NewLimiter creates a new Redis-based Sliding Window Counter limiter.
 // It takes a unique key for the limiter, the size of the sliding window, the maximum limit of requests within the window, and a Redis client instance.
-func NewLimiter(key string, windowSize time.Duration, limit int64, client *redis.Client) *limiter {
-	log.Info().Str("limiter_type", "SlidingWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", windowSize).Int64("limit", limit).Msg("Limiter: Initialized")
-	return &limiter{
-		key:        key, // Store the key
+// Options can be provided to customize the limiter, e.g., by providing a custom clock for testing.
+func NewLimiter(key string, windowSize time.Duration, limit int64, client *redis.Client, opts ...NewLimiterOption) *limiter {
+	limiterObj := &limiter{
+		key:        key,
 		windowSize: windowSize,
 		limit:      limit,
 		client:     client,
 		script:     redisAllowScript,
+		nowFunc:    time.Now, // Default clock
 	}
+	for _, opt := range opts {
+		opt(limiterObj)
+	}
+	log.Info().Str("limiter_type", "SlidingWindowCounter").Str("backend", "Redis").Str("limiter_key", key).Dur("window", windowSize).Int64("limit", limit).Msg("Limiter: Initialized")
+	return limiterObj
 }
 
 // Allow checks if a request is allowed for the given identifier based on the Sliding Window Counter algorithm using Redis.
@@ -41,7 +59,7 @@ func (l *limiter) Allow(ctx context.Context, identifier string) (bool, error) {
 	redisKey := l.key + ":" + identifier
 
 	// Get current time in milliseconds
-	now := time.Now().UnixMilli()
+	now := l.nowFunc().UnixMilli()
 
 	// Window size in milliseconds
 	windowSizeMillis := l.windowSize.Milliseconds()
